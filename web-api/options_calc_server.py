@@ -11,7 +11,7 @@ import traceback
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 import numpy as np
 
 for proxy_key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
@@ -42,7 +42,8 @@ def root(ticker: str | None = None, price: float | None = None,
     When price + iv are both present the live yfinance fetch is skipped.
     """
     if os.path.exists(HTML_FILE):
-        return FileResponse(HTML_FILE)
+            with open(HTML_FILE, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
     return {
         "name": "SwingEdge Options API",
         "status": "ok",
