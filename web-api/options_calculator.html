@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SwingEdge Options Calculator</title>
+<style>
+:root {
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;
+  --border:#30363d;--border2:#444c56;
+  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+  --green:#3fb950;--green2:#1a4f2a;--greentext:#7ee787;
+  --red:#f85149;--red2:#4a1e1c;--redtext:#ff7b72;
+  --blue:#58a6ff;--blue2:#1c3454;
+  --yellow:#d29922;--orange:#e3b341;
+  --accent:#388bfd;--accbg:#1c2c4c;
+  --gold:#f0a500;--goldbg:#2d2100;
+  --radius:8px;--radius2:12px;
+  --mono:'Cascadia Code','Fira Code','Consolas',monospace;
+  --sans:'Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;min-height:100vh;}
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.logo{font-size:14px;font-weight:700;letter-spacing:-.3px;}
+.logo span{color:var(--blue);}
+.content{display:flex;flex:1;overflow:hidden;}
+.sidebar{width:260px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;}
+.main{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;}
+/* topbar */
+.fetch-bar{display:flex;gap:6px;align-items:center;}
+.fetch-bar input{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:5px 9px;font-family:var(--mono);font-size:14px;font-weight:700;width:90px;text-transform:uppercase;outline:none;}
+.fetch-bar input:focus{border-color:var(--accent);}
+.btn{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:var(--radius);padding:5px 10px;font-size:11px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.btn:hover{background:var(--border);color:var(--text);}
+.btn.primary{background:var(--accbg);border-color:var(--accent);color:var(--blue);}
+.btn.primary:hover{background:var(--accent);color:#fff;}
+.badge{font-size:10px;padding:2px 7px;border-radius:12px;white-space:nowrap;}
+.badge.ok{background:var(--green2);color:var(--greentext);}
+.badge.err{background:var(--red2);color:var(--redtext);}
+.badge.idle{background:var(--bg3);color:var(--text3);}
+/* strat tabs */
+.strat-tabs{display:flex;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:3px;}
+.strat-tab{flex:1;padding:4px 6px;text-align:center;font-size:11px;border-radius:5px;cursor:pointer;color:var(--text3);border:none;background:transparent;transition:all .15s;}
+.strat-tab.on{background:var(--bg3);color:var(--text);border:1px solid var(--border2);}
+/* metric cards */
+.mc-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+.mc{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;}
+.mc-l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+.mc-v{font-family:var(--mono);font-size:16px;font-weight:700;}
+.mc-v.pos{color:var(--greentext);}
+.mc-v.neg{color:var(--redtext);}
+/* sliders */
+.section-title{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);font-weight:600;margin-bottom:2px;}
+.pr{margin-bottom:8px;}
+.pl{display:flex;justify-content:space-between;margin-bottom:3px;}
+.pl span:first-child{color:var(--text2);font-size:11px;}
+.pv{font-family:var(--mono);font-size:11px;font-weight:700;}
+input[type=range]{width:100%;accent-color:var(--accent);height:4px;cursor:pointer;}
+/* greeks */
+.greeks{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:8px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
+.gk{text-align:center;}
+.gk-n{font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px;}
+.gk-v{font-family:var(--mono);font-size:11px;font-weight:700;}
+/* info rows */
+.info-row{display:flex;justify-content:space-between;padding:2px 0;font-size:11px;border-bottom:1px solid var(--border);}
+.info-row:last-child{border-bottom:none;}
+.ir-l{color:var(--text3);}
+.ir-v{font-family:var(--mono);font-weight:600;}
+/* view tabs */
+.view-tabs{display:flex;gap:4px;margin-bottom:6px;}
+.vt{padding:4px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:11px;cursor:pointer;background:transparent;color:var(--text3);}
+.vt.on{background:var(--bg3);color:var(--text);border-color:var(--border2);}
+/* heatmap */
+.hm-wrap{overflow-x:auto;}
+table.hm{border-collapse:collapse;width:100%;font-family:var(--mono);}
+table.hm th{padding:4px 6px;font-size:9px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);text-align:center;white-space:nowrap;}
+table.hm th.ecol{color:var(--gold)!important;border-bottom:2px solid var(--gold)!important;}
+table.hm td{padding:5px 5px;text-align:center;font-size:11px;border:1px solid var(--border);white-space:nowrap;cursor:default;min-width:64px;position:relative;}
+table.hm td.rl{text-align:right;background:var(--bg2);color:var(--text3);font-size:10px;padding-right:8px;border-right:1px solid var(--border2);min-width:80px;}
+table.hm tr.cr td.rl{color:var(--text);font-weight:700;}
+table.hm tr.cr td{border-top:1px solid var(--accent);border-bottom:1px solid var(--accent);}
+table.hm td.ecol{border-left:2px solid rgba(240,165,0,.45)!important;border-right:2px solid rgba(240,165,0,.45)!important;}
+table.hm td.imv-up{border-top:2px solid var(--greentext)!important;}
+table.hm td.imv-dn{border-bottom:2px solid var(--redtext)!important;}
+table.hm td.imv-pin{outline:2px solid var(--gold);outline-offset:-2px;}
+.imv-arrow{position:absolute;top:1px;right:2px;font-size:8px;line-height:1;}
+/* Hover tooltip for % return */
+table.hm td .hmtt{
+  display:none;position:absolute;bottom:calc(100% + 5px);left:50%;transform:translateX(-50%);
+  background:var(--bg3);border:1px solid var(--border2);color:var(--text);
+  padding:3px 8px;border-radius:5px;font-size:11px;white-space:nowrap;
+  z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.5);
+  font-family:var(--mono);font-weight:700;
+}
+table.hm td:hover .hmtt{display:block;}
+/* catalyst strip */
+.cat-strip{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--goldbg);border:1px solid rgba(240,165,0,.35);border-radius:var(--radius);padding:7px 12px;font-size:11px;}
+.cat-strip.hidden{display:none;}
+.cat-icon{font-size:14px;}
+.cat-main{font-weight:700;color:var(--gold);}
+.cat-sub{color:var(--text2);}
+.cat-imv{margin-left:auto;display:flex;align-items:center;gap:6px;}
+.imv-pill{background:rgba(240,165,0,.15);border:1px solid rgba(240,165,0,.4);border-radius:20px;padding:2px 9px;font-family:var(--mono);font-weight:700;color:var(--gold);font-size:12px;}
+.cat-note{font-size:10px;color:var(--text3);}
+.levels-strip{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;}
+.levels-strip.hidden{display:none;}
+.lvl-block{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;}
+.lvl-title{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding-top:3px;}
+.lvl-pills{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.lvl-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:999px;border:1px solid var(--border2);font-family:var(--mono);font-size:10px;line-height:1;}
+.lvl-pill.call{background:rgba(248,81,73,.08);border-color:rgba(248,81,73,.35);color:var(--redtext);}
+.lvl-pill.put{background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.35);color:var(--greentext);}
+.lvl-pill.ma{background:rgba(88,166,255,.08);border-color:rgba(88,166,255,.35);color:var(--blue);}
+.lvl-pill.ref{background:rgba(210,153,34,.1);border-color:rgba(210,153,34,.35);color:var(--yellow);}
+.lvl-pill.focus{box-shadow:0 0 0 1px rgba(255,255,255,.05),0 0 18px rgba(210,153,34,.12);}
+.market-read{display:grid;grid-template-columns:minmax(260px,1.25fr) repeat(2,minmax(220px,1fr));gap:10px;background:linear-gradient(180deg,rgba(22,27,34,.98),rgba(13,17,23,.98));border:1px solid var(--border);border-radius:var(--radius2);padding:10px 12px;}
+.market-read.hidden{display:none;}
+.read-card{background:linear-gradient(180deg,rgba(33,38,45,.88),rgba(13,17,23,.92));border:1px solid var(--border);border-radius:10px;padding:10px 12px;min-height:96px;}
+.read-card.bias{border-color:rgba(210,153,34,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.02);}
+.read-card.support{border-color:rgba(63,185,80,.22);}
+.read-card.resistance{border-color:rgba(248,81,73,.22);}
+.read-k{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;}
+.read-v{font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;}
+.read-v.bull{color:var(--greentext);}
+.read-v.bear{color:var(--redtext);}
+.read-v.neutral{color:var(--orange);}
+.read-note{font-size:11px;line-height:1.45;color:var(--text2);}
+.read-pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px;}
+.read-card .lvl-pill{font-size:10px;padding:4px 8px;}
+/* option chain */
+table.chain{border-collapse:collapse;width:100%;font-family:var(--mono);}
+table.chain th{padding:3px 6px;font-size:9px;color:var(--text3);border-bottom:1px solid var(--border);text-align:center;}
+table.chain td{padding:3px 5px;text-align:center;font-size:10px;border:1px solid var(--border);white-space:nowrap;min-width:66px;}
+table.chain td.slbl{text-align:right;background:var(--bg2);color:var(--text3);padding-right:8px;border-right:1px solid var(--border2);min-width:60px;}
+table.chain tr.atm td{border-top:1px dashed var(--yellow);border-bottom:1px dashed var(--yellow);}
+table.chain tr.sel td{border-top:1px solid var(--accent);border-bottom:1px solid var(--accent);}
+table.chain tr.sel td.slbl{color:var(--blue);}
+table.chain tr.wall-call td.slbl{box-shadow:inset 3px 0 0 rgba(248,81,73,.9);background:linear-gradient(90deg,rgba(248,81,73,.1),rgba(22,27,34,.96) 62%);}
+table.chain tr.wall-put td.slbl{box-shadow:inset 3px 0 0 rgba(63,185,80,.9);background:linear-gradient(90deg,rgba(63,185,80,.1),rgba(22,27,34,.96) 62%);}
+table.chain tr.wall-ma td.slbl{box-shadow:inset 3px 0 0 rgba(88,166,255,.9);background:linear-gradient(90deg,rgba(88,166,255,.1),rgba(22,27,34,.96) 62%);}
+table.chain tr.level-stack td.slbl{box-shadow:inset 5px 0 0 rgba(210,153,34,.92);background:linear-gradient(90deg,rgba(210,153,34,.12),rgba(22,27,34,.96) 62%);}
+.itm{background:rgba(56,139,253,.07);}
+/* hedge */
+.hedge-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:12px;}
+.card-title{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);font-weight:600;margin-bottom:10px;}
+.hedge-result{margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;}
+.hbig{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--orange);}
+table.scen{width:100%;border-collapse:collapse;font-size:10px;font-family:var(--mono);}
+table.scen th{padding:2px 5px;border-bottom:1px solid var(--border);color:var(--text3);font-weight:400;text-align:right;}
+table.scen th:first-child{text-align:left;}
+table.scen td{padding:3px 5px;border-bottom:1px solid var(--border);text-align:right;}
+table.scen td:first-child{text-align:left;color:var(--text2);}
+table.scen tr.imv-row td{background:rgba(240,165,0,.12);border-top:1px solid var(--gold);border-bottom:1px solid var(--gold);color:var(--gold)!important;font-weight:700;}
+/* LEAP sync row */
+.leap-sync-row{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin-bottom:10px;}
+.leap-sync-lbl{font-size:11px;color:var(--text3);margin-bottom:1px;}
+.leap-sync-val{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--greentext);}
+.leap-sync-src{font-size:10px;color:var(--text3);}
+.lock-btn{background:transparent;border:1px solid var(--border2);color:var(--text3);border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.lock-btn:hover{border-color:var(--orange);color:var(--orange);}
+.lock-btn.locked{border-color:var(--orange);color:var(--orange);background:rgba(227,179,65,.1);}
+.lock-input{background:var(--bg3);border:1px solid var(--orange);color:var(--orange);border-radius:5px;padding:3px 7px;font-family:var(--mono);font-size:12px;width:72px;outline:none;margin-top:3px;}
+.pos{color:var(--greentext);}
+.neg{color:var(--redtext);}
+.divider{border:none;border-top:1px solid var(--border);margin:8px 0;}
+/* inline type-in fields */
+.pr-inline{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
+.pr-inline span:first-child{color:var(--text2);font-size:11px;flex:1;}
+.type-in{background:var(--bg);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:2px 5px;font-family:var(--mono);font-size:11px;font-weight:700;width:70px;text-align:right;outline:none;}
+.type-in:focus{border-color:var(--accent);}
+/* heatmap range controls */
+.hm-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;margin-bottom:6px;}
+.hm-controls label{font-size:10px;color:var(--text3);}
+.hm-controls .type-in{width:72px;font-size:11px;}
+.hm-level-tags{display:flex;justify-content:flex-end;gap:4px;flex-wrap:wrap;margin-top:4px;}
+.hm-level-tag{display:inline-flex;align-items:center;padding:1px 5px;border-radius:999px;border:1px solid var(--border2);font-size:8px;line-height:1.2;font-weight:700;letter-spacing:.1px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04);}
+.hm-level-tag.call{background:linear-gradient(180deg,rgba(248,81,73,.16),rgba(248,81,73,.06));border-color:rgba(248,81,73,.45);color:var(--redtext);}
+.hm-level-tag.put{background:linear-gradient(180deg,rgba(63,185,80,.16),rgba(63,185,80,.06));border-color:rgba(63,185,80,.45);color:var(--greentext);}
+.hm-level-tag.ma{background:linear-gradient(180deg,rgba(88,166,255,.16),rgba(88,166,255,.06));border-color:rgba(88,166,255,.45);color:var(--blue);}
+table.hm tr.level-call td.rl{box-shadow:inset 3px 0 0 rgba(248,81,73,.95);background:linear-gradient(90deg,rgba(248,81,73,.12),rgba(22,27,34,.96) 58%);}
+table.hm tr.level-put td.rl{box-shadow:inset 3px 0 0 rgba(63,185,80,.95);background:linear-gradient(90deg,rgba(63,185,80,.12),rgba(22,27,34,.96) 58%);}
+table.hm tr.level-ma td.rl{box-shadow:inset 3px 0 0 rgba(88,166,255,.95);background:linear-gradient(90deg,rgba(88,166,255,.11),rgba(22,27,34,.96) 58%);}
+table.hm tr.level-stack td.rl{box-shadow:inset 5px 0 0 rgba(210,153,34,.92);background:linear-gradient(90deg,rgba(210,153,34,.12),rgba(22,27,34,.96) 58%);}
+table.hm tr.level-call td:not(.rl)::after,
+table.hm tr.level-put td:not(.rl)::after,
+table.hm tr.level-ma td:not(.rl)::after,
+table.hm tr.level-stack td:not(.rl)::after{content:'';position:absolute;inset:0;pointer-events:none;opacity:.9;}
+table.hm tr.level-call td:not(.rl)::after{background:linear-gradient(90deg,rgba(248,81,73,.11),rgba(248,81,73,0) 58%);}
+table.hm tr.level-put td:not(.rl)::after{background:linear-gradient(90deg,rgba(63,185,80,.1),rgba(63,185,80,0) 58%);}
+table.hm tr.level-ma td:not(.rl)::after{background:linear-gradient(90deg,rgba(88,166,255,.08),rgba(88,166,255,0) 58%);}
+table.hm tr.level-stack td:not(.rl)::after{background:linear-gradient(90deg,rgba(210,153,34,.1),rgba(210,153,34,0) 62%);}
+table.hm tr.level-stack td.rl .hm-level-tags{gap:5px;}
+/* implied move banner in hedge section */
+.imv-banner{background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.4);border-radius:5px;padding:4px 10px;font-size:10px;margin-bottom:8px;display:none;}
+.imv-banner.show{display:flex;align-items:center;gap:6px;}
+@media (max-width:1200px){
+  .market-read{grid-template-columns:1fr;}
+}
+</style>
+<script>
+window.__seApiBase = (() => {
+  const path = window.location.pathname || '/';
+  return path === '/api' || path.startsWith('/api/') ? '/api' : '';
+})();
+window.__seApiUrl = path => `${window.location.origin}${window.__seApiBase}${path}`;
+</script>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="logo">Swing<span>Edge</span> Options</div>
+    <div class="fetch-bar">
+      <input type="text" id="tickerInput" placeholder="NVDA" value="NVDA" maxlength="6" onkeydown="if(event.key==='Enter')fetchLive()">
+      <button class="btn primary" onclick="fetchLive()">⚡ Fetch Live</button>
+      <span id="fstatus"><span class="badge idle">Not connected</span></span>
+      <span id="fcompany" style="font-size:11px;color:var(--text3)"></span>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:4px">
+      <div class="strat-tabs">
+        <button class="strat-tab on" onclick="setStrat('call',this)">📈 Long Call</button>
+        <button class="strat-tab"   onclick="setStrat('put',this)">📉 Long Put</button>
+        <button class="strat-tab"   onclick="setStrat('hedge',this)">🛡️ LEAP + Hedge</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="sidebar">
+      <div class="section-title">Parameters</div>
+
+      <!-- Spot price: type-in + slider -->
+      <div class="pr">
+        <div class="pr-inline">
+          <span>Spot price ($)</span>
+          <input type="number" class="type-in" id="ti-spot" value="200.00" min="1" max="5000" step="0.5"
+                 oninput="syncTypeIn('spot')" onkeydown="if(event.key==='Enter')this.blur()">
+        </div>
+        <input type="range" id="s-spot" min="5" max="800" step="1" value="200"
+               oninput="syncSlider('spot');syncBounds();calc()">
+      </div>
+
+      <!-- Strike: type-in + slider -->
+      <div class="pr">
+        <div class="pr-inline">
+          <span id="l-strike">Strike ($)</span>
+          <input type="number" class="type-in" id="ti-strike" value="200.00" min="1" max="5000" step="0.5"
+                 oninput="syncTypeIn('strike')" onkeydown="if(event.key==='Enter')this.blur()">
+        </div>
+        <input type="range" id="s-strike" min="5" max="800" step="1" value="200"
+               oninput="syncSlider('strike');calc()">
+      </div>
+
+      <div class="pr">
+        <div class="pr-inline">
+          <span>Days to expiry</span>
+          <input type="number" class="type-in" id="ti-dte" value="180" min="1" max="730" step="1"
+                 oninput="syncTypeIn('dte')" onkeydown="if(event.key==='Enter')this.blur()">
+          <span class="pv" style="font-size:10px;color:var(--text3)">d</span>
+        </div>
+        <input type="range" id="s-dte" min="1" max="730" step="1" value="180" oninput="syncSlider('dte');calc()">
+      </div>
+      <div class="pr">
+        <div class="pr-inline">
+          <span>Implied volatility</span>
+          <input type="number" class="type-in" id="ti-iv" value="30.0" min="0.1" max="200" step="0.5"
+                 style="color:var(--orange);border-color:var(--yellow)"
+                 oninput="syncTypeIn('iv')" onkeydown="if(event.key==='Enter')this.blur()">
+          <span class="pv" style="font-size:10px;color:var(--orange)">%</span>
+        </div>
+        <input type="range" id="s-iv" min="5" max="120" step="0.5" value="30" oninput="syncSlider('iv');calc()">
+      </div>
+      <div class="pr">
+        <div class="pl"><span>Contracts (×100)</span><span class="pv" id="v-qty">1</span></div>
+        <input type="range" id="s-qty" min="1" max="100" step="1" value="1" oninput="calc()">
+      </div>
+      <div class="pr">
+        <div class="pl"><span>Risk-free rate</span><span class="pv" id="v-rate">4.5%</span></div>
+        <input type="range" id="s-rate" min="0" max="10" step="0.1" value="4.5" oninput="calc()">
+      </div>
+      <hr class="divider">
+      <div class="greeks">
+        <div class="gk"><div class="gk-n">Delta</div><div class="gk-v" id="g-d">—</div></div>
+        <div class="gk"><div class="gk-n">Gamma</div><div class="gk-v" id="g-g">—</div></div>
+        <div class="gk"><div class="gk-n">Theta</div><div class="gk-v neg" id="g-t">—</div></div>
+        <div class="gk"><div class="gk-n">Vega</div><div class="gk-v" id="g-v">—</div></div>
+        <div class="gk"><div class="gk-n">Rho</div><div class="gk-v" id="g-r">—</div></div>
+      </div>
+      <div style="padding:4px 0">
+        <div class="info-row"><span class="ir-l">Premium / share</span><span class="ir-v" id="i-prem">—</span></div>
+        <div class="info-row"><span class="ir-l">Total position cost</span><span class="ir-v neg" id="i-cost">—</span></div>
+        <div class="info-row"><span class="ir-l">Breakeven at expiry</span><span class="ir-v" id="i-be">—</span></div>
+        <div class="info-row"><span class="ir-l">Intrinsic value</span><span class="ir-v" id="i-intr">—</span></div>
+        <div class="info-row"><span class="ir-l">Time value</span><span class="ir-v" id="i-time">—</span></div>
+        <div class="info-row"><span class="ir-l">Moneyness</span><span class="ir-v" id="i-money">—</span></div>
+        <div class="info-row"><span class="ir-l">Theta per day ($)</span><span class="ir-v neg" id="i-thetadol">—</span></div>
+        <div class="info-row"><span class="ir-l">Days to 50% loss</span><span class="ir-v" id="i-d50">—</span></div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="mc-row">
+        <div class="mc"><div class="mc-l">Option Premium</div><div class="mc-v" id="m-prem">—</div></div>
+        <div class="mc"><div class="mc-l">Breakeven</div><div class="mc-v" id="m-be">—</div></div>
+        <div class="mc"><div class="mc-l">Max Loss (total)</div><div class="mc-v neg" id="m-ml">—</div></div>
+        <div class="mc"><div class="mc-l">Delta</div><div class="mc-v" id="m-del">—</div></div>
+      </div>
+
+      <!-- catalyst strip -->
+      <div class="cat-strip hidden" id="catStrip">
+        <span class="cat-icon">📅</span>
+        <div>
+          <span class="cat-main" id="catMain">—</span>
+          <span class="cat-sub"  id="catSub"></span>
+        </div>
+        <div class="cat-imv">
+          <span class="cat-note">Implied move (straddle)</span>
+          <span class="imv-pill" id="catImvPill">—</span>
+          <span class="cat-note" id="catImvNote"></span>
+        </div>
+      </div>
+
+      <div class="levels-strip hidden" id="levelsStrip">
+        <div class="lvl-block">
+          <span class="lvl-title">Resistance</span>
+          <div class="lvl-pills" id="callWallPills"></div>
+        </div>
+        <div class="lvl-block">
+          <span class="lvl-title">Support</span>
+          <div class="lvl-pills" id="putWallPills"></div>
+        </div>
+        <div class="lvl-block">
+          <span class="lvl-title">Trend</span>
+          <div class="lvl-pills" id="maPills"></div>
+        </div>
+        <div class="lvl-block">
+          <span class="lvl-title">Ref Exp</span>
+          <div class="lvl-pills" id="refExpiryPills"></div>
+        </div>
+      </div>
+      <div class="market-read hidden" id="marketRead">
+        <div class="read-card bias">
+          <div class="read-k">Market Read</div>
+          <div class="read-v neutral" id="readBiasTitle">Waiting for live levels</div>
+          <div class="read-note" id="readBiasNote">Fetch live data to rank nearby support and resistance.</div>
+        </div>
+        <div class="read-card support">
+          <div class="read-k">Primary Support</div>
+          <div class="read-pills" id="readSupportPills"></div>
+          <div class="read-note" id="readSupportNote"></div>
+        </div>
+        <div class="read-card resistance">
+          <div class="read-k">Primary Resistance</div>
+          <div class="read-pills" id="readResistancePills"></div>
+          <div class="read-note" id="readResistanceNote"></div>
+        </div>
+      </div>
+
+      <div class="view-tabs">
+        <button class="vt on" onclick="setView('heatmap',this)">P&amp;L Heatmap</button>
+        <button class="vt"   onclick="setView('chain',this)">Option Chain</button>
+      </div>
+
+      <div id="view-heatmap">
+        <!-- Price range controls -->
+        <div class="hm-controls">
+          <label>📐 Scenario range</label>
+          <label>From $</label>
+          <input type="number" class="type-in" id="hm-lo" placeholder="auto" step="1"
+                 oninput="calc()" onkeydown="if(event.key==='Enter')this.blur()">
+          <label>To $</label>
+          <input type="number" class="type-in" id="hm-hi" placeholder="auto" step="1"
+                 oninput="calc()" onkeydown="if(event.key==='Enter')this.blur()">
+          <span style="font-size:9px;color:var(--text3);margin-left:2px">½% steps · updates live</span>
+          <button class="btn" style="font-size:10px;padding:2px 8px" onclick="resetHmRange()">↺ Reset</button>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:5px">
+          P&amp;L by price scenario × time elapsed — hover cell for % return
+        </div>
+        <div class="hm-wrap"><table class="hm" id="hmTable"></table></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:5px">
+          Red = loss · Green = profit · Bold row = spot · <span id="hmLegend"></span>
+        </div>
+      </div>
+
+      <div id="view-chain" style="display:none">
+        <div class="hm-controls">
+          <label>Chain range</label>
+          <label>From $</label>
+          <input type="number" class="type-in" id="chain-lo" placeholder="auto" step="1"
+                 oninput="calc()" onkeydown="if(event.key==='Enter')this.blur()">
+          <label>To $</label>
+          <input type="number" class="type-in" id="chain-hi" placeholder="auto" step="1"
+                 oninput="calc()" onkeydown="if(event.key==='Enter')this.blur()">
+          <span style="font-size:9px;color:var(--text3);margin-left:2px">adaptive strike steps</span>
+          <button class="btn" style="font-size:10px;padding:2px 8px" onclick="resetChainRange()">Reset</button>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:5px">
+          Pricing across strikes (±30%) × expiries. Blue = ITM · Dashed = ATM · Solid = selected strike.
+        </div>
+        <div class="hm-wrap"><table class="chain" id="chainTable"></table></div>
+      </div>
+
+      <!-- LEAP + Hedge -->
+      <div id="hedgeSection" style="display:none">
+        <hr class="divider">
+        <div class="section-title" style="margin-bottom:8px">LEAP + Put Hedge — Profit both sides around a catalyst</div>
+        <div class="hedge-grid">
+
+          <div class="card">
+            <div class="card-title">📈 LEAP Position</div>
+            <div class="leap-sync-row">
+              <div style="flex:1">
+                <div class="leap-sync-lbl">Entry price ($/shr)</div>
+                <div style="display:flex;align-items:baseline;gap:6px;margin-top:3px">
+                  <span class="leap-sync-val" id="hv-entry-display">—</span>
+                  <span class="leap-sync-src" id="hv-entry-src">synced to premium</span>
+                </div>
+                <div id="lockInputWrap" style="display:none;margin-top:4px">
+                  <input type="number" class="lock-input" id="lockInput" value="0" step="0.01" min="0.01" oninput="calcHedge()">
+                </div>
+              </div>
+              <button class="lock-btn" id="lockBtn" onclick="toggleLock()">🔓 Lock</button>
+            </div>
+            <div class="info-row" style="margin-bottom:6px">
+              <span class="ir-l">Contracts (synced)</span>
+              <span class="ir-v" id="hv-qty-display">—</span>
+            </div>
+            <div style="font-size:10px;color:var(--text3);margin-bottom:8px">Use main Contracts slider to adjust.</div>
+            <div class="info-row"><span class="ir-l">Total LEAP cost</span><span class="ir-v neg" id="hv-cost">—</span></div>
+            <div class="info-row"><span class="ir-l">LEAP delta</span><span class="ir-v" id="hv-delta">—</span></div>
+            <div class="info-row"><span class="ir-l">Delta exposure</span><span class="ir-v" id="hv-totd">—</span></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">🛡️ Hedge Put (2–30 DTE)</div>
+            <div class="pr">
+              <div class="pl"><span>Put DTE</span><span class="pv" id="hv-pdte">7d</span></div>
+              <input type="range" id="hs-pdte" min="2" max="30" step="1" value="7" oninput="calcHedge()">
+            </div>
+            <div class="pr">
+              <div class="pl"><span>Strike below spot</span><span class="pv" id="hv-pstk">-5%</span></div>
+              <input type="range" id="hs-pstk" min="1" max="20" step="1" value="5" oninput="calcHedge()">
+            </div>
+            <div class="pr">
+              <div class="pl"><span>Hedge ratio</span><span class="pv" id="hv-hrat">50%</span></div>
+              <input type="range" id="hs-hrat" min="25" max="100" step="25" value="50" oninput="calcHedge()">
+            </div>
+            <div class="hedge-result" id="hedgeOutput">—</div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">📊 Catalyst Scenarios</div>
+            <!-- Implied move banner -->
+            <div class="imv-banner" id="imvBanner">
+              <span style="color:var(--gold)">📐</span>
+              <span style="color:var(--gold);font-weight:700">Implied move:</span>
+              <span id="imvBannerVal" style="color:var(--gold);font-family:var(--mono);font-weight:700">—</span>
+              <span style="color:var(--text3)">· gold rows = probable range</span>
+            </div>
+            <table class="scen">
+              <thead><tr>
+                <th>Move</th>
+                <th>Put P&amp;L</th>
+                <th title="Change in LEAP value from today's market price">LEAP Δ mkt</th>
+                <th title="Combined P&amp;L of puts + LEAP mark change">Net Δ</th>
+                <th title="Your total LEAP profit/loss vs what you paid">vs Entry</th>
+              </tr></thead>
+              <tbody id="scenBody"></tbody>
+            </table>
+            <div style="font-size:9px;color:var(--text3);margin-top:6px">
+              <b style="color:var(--text2)">LEAP Δ mkt</b> = change from today's price (what the puts offset). &nbsp;<b style="color:var(--text2)">vs Entry</b> = your total P&amp;L vs cost basis. Gold row = implied move.
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Black-Scholes ────────────────────────────────────────────────────────────
+function ncdf(x){
+  const a=[0.254829592,-0.284496736,1.421413741,-1.453152027,1.061405429],p=0.3275911;
+  const s=x<0?-1:1;x=Math.abs(x)/Math.sqrt(2);
+  const t=1/(1+p*x);
+  const y=1-((((a[4]*t+a[3])*t+a[2])*t+a[1])*t+a[0])*t*Math.exp(-x*x);
+  return .5*(1+s*y);
+}
+function bs(S,K,T,r,sigma,type){
+  if(T<=0.0001)return type==='call'?Math.max(0,S-K):Math.max(0,K-S);
+  const d1=(Math.log(S/K)+(r+sigma*sigma/2)*T)/(sigma*Math.sqrt(T));
+  const d2=d1-sigma*Math.sqrt(T);
+  if(type==='call')return S*ncdf(d1)-K*Math.exp(-r*T)*ncdf(d2);
+  return K*Math.exp(-r*T)*ncdf(-d2)-S*ncdf(-d1);
+}
+function greeks(S,K,T,r,sigma,type){
+  if(T<=0.0001)return{delta:type==='call'?(S>K?1:0):-1*(S<K?1:0),gamma:0,theta:0,vega:0,rho:0};
+  const d1=(Math.log(S/K)+(r+sigma*sigma/2)*T)/(sigma*Math.sqrt(T));
+  const d2=d1-sigma*Math.sqrt(T);
+  const nd1=Math.exp(-d1*d1/2)/Math.sqrt(2*Math.PI);
+  const delta=type==='call'?ncdf(d1):ncdf(d1)-1;
+  const gamma=nd1/(S*sigma*Math.sqrt(T));
+  const theta=(-(S*nd1*sigma)/(2*Math.sqrt(T))-r*K*Math.exp(-r*T)*(type==='call'?ncdf(d2):ncdf(-d2)))/365;
+  const vega=S*nd1*Math.sqrt(T)/100;
+  const rho=type==='call'?K*T*Math.exp(-r*T)*ncdf(d2)/100:-K*T*Math.exp(-r*T)*ncdf(-d2)/100;
+  return{delta,gamma,theta,vega,rho};
+}
+function cellColor(pnl,scale){
+  if(!scale)return'';
+  const r=Math.max(-1,Math.min(3,pnl/Math.abs(scale)));
+  if(r<0)return`rgba(248,81,73,${Math.min(.7,Math.abs(r)*.6).toFixed(2)})`;
+  return`rgba(63,185,80,${Math.min(.55,r*.25).toFixed(2)})`;
+}
+
+// ── State ────────────────────────────────────────────────────────────────────
+let strategy='call',currentView='heatmap';
+let catalystData=null;
+let currentPrem=0;
+let entryLocked=false;
+
+// Default heatmap time columns
+const TIME_FRAC=[0,.15,.30,.50,.70,.85,1];
+
+function $v(id){return parseFloat(document.getElementById(id).value);}
+function $el(id){return document.getElementById(id);}
+function fmt$(n){return(n>=0?'+$':'-$')+Math.abs(Math.round(n)).toLocaleString();}
+function fmtPct(n){return(n>=0?'+':'')+n.toFixed(0)+'%';}
+
+// ── Date label helper ─────────────────────────────────────────────────────────
+const _MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function dateLabel(daysFromNow){
+  const d=new Date();d.setDate(d.getDate()+Math.round(daysFromNow));
+  return _MONTHS[d.getMonth()]+' '+d.getDate();
+}
+
+// ── Dynamic heatmap rows from price range inputs ──────────────────────────────
+function getHmRows(S){
+  const lo=parseFloat($el('hm-lo').value);
+  const hi=parseFloat($el('hm-hi').value);
+  if(!lo||!hi||lo<=0||hi<=lo){
+    // Default: ±20% at 2% steps when no range set
+    const r=[];
+    for(let p=-20;p<=20;p+=2)r.push(p);
+    return r;
+  }
+  const lowPct=(lo/S-1)*100;
+  const highPct=(hi/S-1)*100;
+  const span=highPct-lowPct;
+  // Adaptive step: 0.5% when span ≤ 15%, 1% when ≤ 30%, 2% otherwise
+  const step=span<=15?0.5:span<=30?1:2;
+  const rows=[];
+  const start=Math.ceil(lowPct/step)*step;
+  for(let p=start;p<=highPct+step*0.01;p+=step){
+    rows.push(Math.round(p*10)/10);
+  }
+  // Always include 0 (current price)
+  if(!rows.some(r=>Math.abs(r)<step*0.4)){
+    rows.push(0);rows.sort((a,b)=>a-b);
+  }
+  return rows.length>0?rows:[-10,-5,0,5,10];
+}
+
+function resetHmRange(){
+  $el('hm-lo').value='';$el('hm-hi').value='';
+  calc();
+}
+
+function syncBounds(){
+  const s=parseFloat($el('ti-spot').value)||200;
+  const lo=Math.floor(s*.35),hi=Math.ceil(s*1.65);
+  $el('s-strike').min=lo;$el('s-strike').max=hi;
+}
+
+// ── Two-way sync: type-in ↔ slider ───────────────────────────────────────────
+function syncTypeIn(field){
+  if(field==='spot'){
+    let v=parseFloat($el('ti-spot').value)||200;
+    v=Math.max(1,Math.min(5000,v));
+    $el('ti-spot').value=v.toFixed(2);
+    // Expand slider range if needed
+    if(v>parseFloat($el('s-spot').max))$el('s-spot').max=Math.ceil(v*1.3);
+    if(v<parseFloat($el('s-spot').min))$el('s-spot').min=Math.max(1,Math.floor(v*0.7));
+    $el('s-spot').value=v;
+    syncBounds();
+    calc();
+  } else if(field==='strike'){
+    let v=parseFloat($el('ti-strike').value)||200;
+    v=Math.max(1,Math.min(5000,v));
+    $el('ti-strike').value=v.toFixed(2);
+    if(v>parseFloat($el('s-strike').max))$el('s-strike').max=Math.ceil(v*1.3);
+    if(v<parseFloat($el('s-strike').min))$el('s-strike').min=Math.max(1,Math.floor(v*0.7));
+    $el('s-strike').value=v;
+    calc();
+  } else if(field==='dte'){
+    let v=parseInt($el('ti-dte').value)||180;
+    v=Math.max(1,Math.min(730,v));
+    $el('ti-dte').value=v;
+    $el('s-dte').value=v;
+    calc();
+  } else if(field==='iv'){
+    let v=parseFloat($el('ti-iv').value)||30;
+    v=Math.max(0.1,Math.min(200,v));
+    if(v>120){$el('s-iv').max=Math.ceil(v);}
+    $el('ti-iv').value=parseFloat(v.toFixed(1));
+    $el('s-iv').value=v;
+    calc();
+  }
+}
+function syncSlider(field){
+  if(field==='spot'){
+    const v=parseFloat($el('s-spot').value);
+    $el('ti-spot').value=v.toFixed(2);
+  }
+  if(field==='strike'){
+    const v=parseFloat($el('s-strike').value);
+    $el('ti-strike').value=v.toFixed(2);
+  }
+  if(field==='dte')$el('ti-dte').value=$el('s-dte').value;
+  if(field==='iv') $el('ti-iv').value=parseFloat($el('s-iv').value).toFixed(1);
+}
+
+// ── Lock toggle ──────────────────────────────────────────────────────────────
+function toggleLock(){
+  entryLocked=!entryLocked;
+  const btn=$el('lockBtn'),wrap=$el('lockInputWrap');
+  if(entryLocked){
+    btn.textContent='🔒 Locked';btn.classList.add('locked');
+    wrap.style.display='block';
+    $el('lockInput').value=currentPrem.toFixed(2);
+    $el('hv-entry-src').textContent='manual override';
+  } else {
+    btn.textContent='🔓 Lock';btn.classList.remove('locked');
+    wrap.style.display='none';
+    $el('hv-entry-src').textContent='synced to premium';
+  }
+  calcHedge();
+}
+function getLeapEntry(){
+  if(entryLocked){const v=parseFloat($el('lockInput').value);return(!isNaN(v)&&v>0)?v:currentPrem;}
+  return currentPrem;
+}
+
+// ── Main calc ────────────────────────────────────────────────────────────────
+function calc(){
+  // Type-in fields are source of truth; sliders stay in sync
+  const S=parseFloat($el('ti-spot').value)||200;
+  const K=parseFloat($el('ti-strike').value)||200;
+  const dte=$v('s-dte'),iv=$v('s-iv')/100;
+  const qty=$v('s-qty'),rate=$v('s-rate')/100;
+  const T=dte/365,type=strategy==='put'?'put':'call';
+
+  $el('v-qty').textContent=$v('s-qty');
+  $el('v-rate').textContent=$v('s-rate').toFixed(1)+'%';
+
+  const prem=bs(S,K,T,rate,iv,type);
+  currentPrem=prem;
+  const g=greeks(S,K,T,rate,iv,type);
+  const totalCost=prem*qty*100;
+  const be=type==='call'?K+prem:K-prem;
+  const intr=type==='call'?Math.max(0,S-K):Math.max(0,K-S);
+  const tv=prem-intr,mono=(S-K)/K*100;
+  const thetaDol=g.theta*qty*100;
+  const d50=prem>0?Math.round(prem*0.5/Math.abs(g.theta)):'—';
+
+  $el('m-prem').textContent='$'+prem.toFixed(2)+'/shr';
+  $el('m-be').textContent='$'+be.toFixed(2);
+  $el('m-ml').textContent='-$'+totalCost.toLocaleString(undefined,{maximumFractionDigits:0});
+  $el('m-del').textContent=g.delta.toFixed(3);
+  $el('i-prem').textContent='$'+prem.toFixed(2);
+  $el('i-cost').textContent='-$'+totalCost.toLocaleString(undefined,{maximumFractionDigits:0});
+  $el('i-be').textContent='$'+be.toFixed(2);
+  $el('i-intr').textContent='$'+intr.toFixed(2);
+  $el('i-time').textContent='$'+tv.toFixed(2);
+  $el('i-money').innerHTML=mono>=0?`<span class="pos">+${mono.toFixed(1)}% ITM</span>`:`<span class="neg">${mono.toFixed(1)}% OTM</span>`;
+  $el('i-thetadol').textContent=thetaDol.toFixed(2);
+  $el('i-d50').textContent=typeof d50==='number'?d50+'d':'—';
+  $el('g-d').textContent=g.delta.toFixed(3);
+  $el('g-g').textContent=g.gamma.toFixed(4);
+  $el('g-t').textContent=g.theta.toFixed(3);
+  $el('g-v').textContent=g.vega.toFixed(3);
+  $el('g-r').textContent=g.rho.toFixed(3);
+
+  if(!entryLocked) $el('hv-entry-display').textContent='$'+prem.toFixed(2);
+  $el('hv-qty-display').textContent=qty;
+
+  if(currentView==='heatmap') buildHeatmap(S,K,dte,iv,rate,qty,type,prem);
+  else buildChain(S,dte,iv,rate,type);
+  if(strategy==='hedge') calcHedge();
+}
+
+// ── Heatmap ──────────────────────────────────────────────────────────────────
+function buildHeatmap(S,K,dte,iv,rate,qty,type,entryPrem){
+  const scale=entryPrem*qty*100;
+  const rows=getHmRows(S);
+
+  // Catalyst annotations
+  let eColIdx=-1,imvUpRowIdx=-1,imvDnRowIdx=-1,imvPct=0;
+  if(catalystData){
+    const dte_e=catalystData.days_to_earnings;
+    const imv=catalystData.implied_move_pct;
+    if(dte_e!=null&&dte_e>0&&dte_e<=dte){
+      const frac=dte_e/dte;
+      let best=Infinity;
+      TIME_FRAC.forEach((f,i)=>{const d=Math.abs(f-frac);if(d<best){best=d;eColIdx=i;}});
+    }
+    if(imv!=null&&imv>0){
+      imvPct=imv;
+      let bdU=Infinity,bdD=Infinity;
+      rows.forEach((r,i)=>{
+        const du=Math.abs(r-imv);if(du<bdU){bdU=du;imvUpRowIdx=i;}
+        const dd=Math.abs(r+imv);if(dd<bdD){bdD=dd;imvDnRowIdx=i;}
+      });
+    }
+  }
+
+  // Column headers with actual calendar dates
+  let html='<thead><tr><th style="min-width:80px"></th>';
+  TIME_FRAC.forEach((f,i)=>{
+    const daysElapsed=Math.round(dte*f);
+    const isE=(i===eColIdx);
+    const isLast=(i===TIME_FRAC.length-1);
+    const lbl=i===0?'Now':(isLast?dateLabel(dte)+' ★':dateLabel(daysElapsed));
+    const dteRemaining=dte-daysElapsed;
+    html+=`<th${isE?' class="ecol"':''}>
+      ${lbl}${isE?` <span style="color:var(--gold);font-size:8px">▼</span>`:''}
+      <br><span style="font-size:8px;color:${isE?'var(--gold)':'var(--text3)'}">
+        ${i===0?'today':isLast?'expiry':dteRemaining+'d left'}
+      </span></th>`;
+  });
+  html+='</tr></thead><tbody>';
+
+  rows.forEach((pct,ri)=>{
+    const sS=S*(1+pct/100),isCur=(pct===0);
+    const isUp=(ri===imvUpRowIdx),isDn=(ri===imvDnRowIdx);
+    html+=`<tr class="${isCur?'cr':''}">`;
+    const priceLbl=`<span style="font-size:8px;color:${isCur?'var(--blue)':'var(--text3)'};display:block;margin-top:1px">$${sS.toFixed(2)}</span>`;
+    let lbl=pct===0?'→ NOW':pct>0?'+'+pct+'%':pct+'%';
+    if(isUp&&imvPct>0)lbl+=` <span style="color:var(--greentext);font-size:8px">↑</span>`;
+    if(isDn&&imvPct>0)lbl+=` <span style="color:var(--redtext);font-size:8px">↓</span>`;
+    html+=`<td class="rl">${lbl}${priceLbl}</td>`;
+
+    TIME_FRAC.forEach((f,ci)=>{
+      const remT=Math.max(0,(dte*(1-f))/365);
+      const scenPrem=bs(sS,K,remT,rate,iv,type);
+      const pnl=(scenPrem-entryPrem)*qty*100;
+      const bg=cellColor(pnl,scale);
+      const pctReturn=entryPrem*qty*100!==0?pnl/(entryPrem*qty*100)*100:0;
+      const pctStr=(pctReturn>=0?'+':'')+pctReturn.toFixed(0)+'%';
+      const isE=(ci===eColIdx),isPinUp=(isUp&&isE),isPinDn=(isDn&&isE);
+      let cls='';
+      if(isE)cls+=' ecol';
+      if(isUp)cls+=' imv-up';
+      if(isDn)cls+=' imv-dn';
+      if(isPinUp||isPinDn)cls+=' imv-pin';
+      const arrow=isPinUp?'<span class="imv-arrow" style="color:var(--greentext)">▲</span>':
+                  isPinDn?'<span class="imv-arrow" style="color:var(--redtext)">▼</span>':'';
+      // Tooltip shows % return on hover; cell shows only $ (bigger text)
+      html+=`<td class="${cls.trim()}" style="background:${bg}">
+        <span style="font-family:var(--mono)">${fmt$(pnl)}</span>
+        <span class="hmtt">${pctStr} return</span>${arrow}</td>`;
+    });
+    html+='</tr>';
+  });
+  html+='</tbody>';
+  $el('hmTable').innerHTML=html;
+
+  let leg='';
+  if(eColIdx>=0)leg+=`<span style="color:var(--gold)">▼ gold col = earnings in ${catalystData.days_to_earnings}d</span>`;
+  if(imvPct>0)leg+=`<span style="margin-left:8px;color:var(--greentext)">↑+${imvPct}%</span><span style="color:var(--text3)"> / </span><span style="color:var(--redtext)">↓−${imvPct}%</span><span style="color:var(--text3)"> = implied move rows</span>`;
+  $el('hmLegend').innerHTML=leg;
+}
+
+// ── Chain ────────────────────────────────────────────────────────────────────
+function buildChain(S,dte,iv,rate,type){
+  const exps=[7,14,21,30,45,60,90,120,180,240,270,360];
+  const offsets=[-30,-25,-20,-15,-10,-7,-5,-3,0,3,5,7,10,15,20,25,30];
+  const selK=parseFloat($el('ti-strike').value)||S;
+  let html='<thead><tr><th>Strike</th>';
+  exps.forEach(d=>html+=`<th>${d}d</th>`);
+  html+='</tr></thead><tbody>';
+  offsets.forEach(off=>{
+    const K=Math.round(S*(1+off/100)*10)/10;
+    const isATM=Math.abs(off)<=1,isSel=Math.abs(K-selK)<=S*0.025;
+    const itm=type==='call'?K<S:K>S;
+    html+=`<tr class="${isATM?'atm':isSel?'sel':''}">`;
+    html+=`<td class="slbl">${K.toFixed(1)}<br><span style="font-size:8px">${off===0?'ATM':off>0?'+'+off+'%':off+'%'}</span></td>`;
+    exps.forEach(d=>{
+      const T=d/365,p=bs(S,K,T,rate,iv,type),g2=greeks(S,K,T,rate,iv,type);
+      html+=`<td ${itm?'class="itm"':''}>$${p.toFixed(2)}<br><span style="font-size:8px;color:var(--text3)">${g2.delta>=0?'+':''}${g2.delta.toFixed(2)}Δ</span></td>`;
+    });
+    html+='</tr>';
+  });
+  $el('chainTable').innerHTML=html+'</tbody>';
+}
+
+// ── Hedge calc ───────────────────────────────────────────────────────────────
+function calcHedge(){
+  const S=parseFloat($el('ti-spot').value)||200;
+  const K=parseFloat($el('ti-strike').value)||200;
+  const dte=$v('s-dte'),iv=$v('s-iv')/100,rate=$v('s-rate')/100;
+  const T=dte/365;
+  const leapG=greeks(S,K,T,rate,iv,'call');
+  const leapEntry=getLeapEntry();
+  const leapQty=$v('s-qty');
+  const leapCost=leapEntry*leapQty*100;
+  const totDelta=leapG.delta*leapQty*100;
+
+  const dispEntry=entryLocked?(parseFloat($el('lockInput').value)||leapEntry):leapEntry;
+  $el('hv-entry-display').textContent='$'+dispEntry.toFixed(2);
+  $el('hv-qty-display').textContent=leapQty;
+  $el('hv-cost').textContent='-$'+leapCost.toLocaleString(undefined,{maximumFractionDigits:0});
+  $el('hv-delta').textContent=leapG.delta.toFixed(3);
+  $el('hv-totd').textContent='+'+totDelta.toFixed(0)+' shares equiv';
+
+  const pdte=$v('hs-pdte'),pctB=$v('hs-pstk'),hrat=$v('hs-hrat')/100;
+  const putK=S*(1-pctB/100),putT=pdte/365;
+  const putPrem=bs(S,putK,putT,rate,iv,'put');
+  const putG=greeks(S,putK,putT,rate,iv,'put');
+  const putsN=Math.max(1,Math.ceil((totDelta*hrat)/Math.abs(putG.delta*100)));
+  const putCost=putsN*putPrem*100;
+
+  $el('hv-pdte').textContent=pdte+'d';
+  $el('hv-pstk').textContent='-'+pctB+'%';
+  $el('hv-hrat').textContent=$v('hs-hrat')+'%';
+  $el('hedgeOutput').innerHTML=`
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Contracts needed</div>
+    <div class="hbig">${putsN} puts</div>
+    <div style="font-size:11px;color:var(--text2);margin-top:5px">Strike $${putK.toFixed(2)} · Delta ${putG.delta.toFixed(3)} · $${putPrem.toFixed(2)}/shr</div>
+    <div style="font-size:11px;margin-top:3px" class="neg">Hedge cost: -$${putCost.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:4px">${$v('hs-hrat')}% hedge · ${leapQty} contracts</div>`;
+
+  const imvPct=catalystData?.implied_move_pct??null;
+
+  // Show/hide implied move banner
+  const banner=$el('imvBanner');
+  if(imvPct!=null&&imvPct>0){
+    banner.classList.add('show');
+    $el('imvBannerVal').textContent=`±${imvPct}%`;
+  } else {
+    banner.classList.remove('show');
+  }
+
+  const currentLeapMark=bs(S,K,T,rate,iv,'call');
+
+  // ±20% both directions with implied move highlighting
+  const moves=[20,15,10,7,5,3,0,-3,-5,-7,-10,-15,-20];
+
+  let tbody='';
+  moves.forEach(d=>{
+    const newS=S*(1+d/100),remT=Math.max(0.001,(dte-pdte)/365);
+    const newLP=bs(newS,K,remT,rate,iv,'call');
+    const leapMktDelta=(newLP-currentLeapMark)*leapQty*100;
+    const leapVsEntry=(newLP-leapEntry)*leapQty*100;
+    const payoff=Math.max(0,putK-newS);
+    const putPnl=(payoff-putPrem)*putsN*100;
+    const net=putPnl+leapMktDelta;
+    const pp=putPnl>=0?'pos':'neg';
+    const lm=leapMktDelta>=0?'pos':'neg';
+    const np=net>=0?'pos':'neg';
+    const ve=leapVsEntry>=0?'pos':'neg';
+    // Match implied move on BOTH up and down sides
+    const isImvUp=imvPct!=null&&d>0&&Math.abs(d-imvPct)<2.5;
+    const isImvDn=imvPct!=null&&d<0&&Math.abs(d+imvPct)<2.5;
+    const isImv=isImvUp||isImvDn;
+    const imvTag=isImvUp?' ◀ ↑imv':isImvDn?' ◀ ↓imv':'';
+    const moveLbl=d===0?'Flat':d>0?'+'+d+'%':d+'%';
+    tbody+=`<tr${isImv?' class="imv-row"':''}>
+      <td>${moveLbl}${imvTag}</td>
+      <td class="${pp}">${putPnl>=0?'+':'-'}$${Math.abs(Math.round(putPnl)).toLocaleString()}</td>
+      <td class="${lm}">${leapMktDelta>=0?'+':'-'}$${Math.abs(Math.round(leapMktDelta)).toLocaleString()}</td>
+      <td class="${np}" style="font-weight:700">${net>=0?'+':'-'}$${Math.abs(Math.round(net)).toLocaleString()}</td>
+      <td class="${ve}" style="font-size:9px;color:${leapVsEntry>=0?'var(--greentext)':'var(--redtext)'}">${leapVsEntry>=0?'+':'-'}$${Math.abs(Math.round(leapVsEntry)).toLocaleString()}</td>
+    </tr>`;
+  });
+  $el('scenBody').innerHTML=tbody;
+}
+
+// ── Catalyst strip render ────────────────────────────────────────────────────
+function renderCatalystStrip(){
+  const strip=$el('catStrip');
+  if(!catalystData){strip.classList.add('hidden');return;}
+  const{earnings_date,days_to_earnings,implied_move_pct,straddle_expiry}=catalystData;
+  if(!earnings_date&&!implied_move_pct){strip.classList.add('hidden');return;}
+  strip.classList.remove('hidden');
+  if(earnings_date&&days_to_earnings!=null){
+    $el('catMain').textContent=`Earnings ${earnings_date}`;
+    $el('catSub').textContent=` — ${days_to_earnings} day${days_to_earnings===1?'':'s'} away`;
+  } else {
+    $el('catMain').textContent='No upcoming earnings found';
+    $el('catSub').textContent='';
+  }
+  if(implied_move_pct!=null){
+    $el('catImvPill').textContent=`±${implied_move_pct}%`;
+    $el('catImvNote').textContent=straddle_expiry?`(${straddle_expiry} expiry)`:'';
+  } else {
+    $el('catImvPill').textContent='—';
+    $el('catImvNote').textContent='chain data unavailable';
+  }
+}
+
+// ── Strat / view ─────────────────────────────────────────────────────────────
+function setStrat(s,btn){
+  strategy=s;
+  document.querySelectorAll('.strat-tab').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  $el('hedgeSection').style.display=s==='hedge'?'block':'none';
+  $el('l-strike').textContent=s==='put'?'Put strike ($)':'Strike ($)';
+  calc();
+}
+function setView(v,btn){
+  currentView=v;
+  document.querySelectorAll('.vt').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  $el('view-heatmap').style.display=v==='heatmap'?'block':'none';
+  $el('view-chain').style.display=v==='chain'?'block':'none';
+  calc();
+}
+
+// ── Fetch live (quote + catalyst in parallel) ────────────────────────────────
+async function fetchLive(){
+  const t=$el('tickerInput').value.toUpperCase().trim();
+  if(!t)return;
+  $el('fstatus').innerHTML='<span class="badge idle">Fetching...</span>';
+  $el('fcompany').textContent='';
+  catalystData=null;
+  renderCatalystStrip();
+  try{
+    const[qRes,cRes]=await Promise.all([
+      fetch(window.__seApiUrl(`/quote/${t}`),   {signal:AbortSignal.timeout(8000)}),
+      fetch(window.__seApiUrl(`/catalyst/${t}`),{signal:AbortSignal.timeout(14000)})
+    ]);
+    if(!qRes.ok)throw new Error('HTTP '+qRes.status);
+    const q=await qRes.json();
+    if(q.error)throw new Error(q.error);
+    const p=q.price,lo=Math.floor(p*.35),hi=Math.ceil(p*1.65);
+    // Update both slider and type-in
+    $el('s-spot').min=lo;$el('s-spot').max=hi;$el('s-spot').value=p;
+    $el('ti-spot').value=p.toFixed(2);
+    $el('s-strike').min=lo;$el('s-strike').max=hi;$el('s-strike').value=Math.round(p);
+    $el('ti-strike').value=Math.round(p).toFixed(2);
+    // Default heatmap range to ±15%
+    $el('hm-lo').value=Math.round(p*0.85);
+    $el('hm-hi').value=Math.round(p*1.15);
+    if(q.iv_pct){
+      const ivv=Math.min(120,q.iv_pct);
+      $el('s-iv').value=ivv;
+      $el('ti-iv').value=ivv.toFixed(1);
+    }
+    $el('fstatus').innerHTML=`<span class="badge ok">✓ ${t} live</span>`;
+    const src=q.iv_source==='hv30_fallback'?' (HV30)':' (ATM IV)';
+    $el('fcompany').textContent=`${q.company||t} · IV${src} ${q.iv_pct?q.iv_pct.toFixed(1)+'%':'—'}`;
+    if(cRes.ok){const c=await cRes.json();if(!c.error)catalystData=c;}
+    renderCatalystStrip();
+    calc();
+  }catch(e){
+    $el('fstatus').innerHTML='<span class="badge err">Server offline</span>';
+    $el('fcompany').textContent='Run options_calc_server.py first';
+  }
+}
+
+// ── Initial render ───────────────────────────────────────────────────────────
+syncBounds();
+calc();
+
+// ── Bridge 1: URL deep-link from SwingEdge ticker page ───────────────────────
+// Accepts: ?ticker=AAPL&price=185&strike=180&dte=270&iv=32
+window.addEventListener('DOMContentLoaded', () => {
+  const p       = new URLSearchParams(window.location.search);
+  const pTicker = p.get('ticker');
+  const pPrice  = p.get('price')  !== null ? parseFloat(p.get('price'))  : null;
+  const pStrike = p.get('strike') !== null ? parseFloat(p.get('strike')) : null;
+  const pDte    = p.get('dte')    !== null ? parseInt(p.get('dte'), 10)  : null;
+  const pIv     = p.get('iv')     !== null ? parseFloat(p.get('iv'))     : null;
+  if (!pTicker) return;
+
+  $el('tickerInput').value = pTicker.toUpperCase();
+
+  const applyOverrides = () => {
+    if (pPrice !== null) {
+      const lo = Math.floor(pPrice * 0.35), hi = Math.ceil(pPrice * 1.65);
+      $el('s-spot').min  = lo; $el('s-spot').max  = hi; $el('s-spot').value  = pPrice;
+      $el('ti-spot').value = pPrice.toFixed(2);
+      $el('s-strike').min = lo; $el('s-strike').max = hi;
+      // Default heatmap range
+      $el('hm-lo').value = Math.round(pPrice * 0.85);
+      $el('hm-hi').value = Math.round(pPrice * 1.15);
+    }
+    if (pStrike !== null) {
+      $el('s-strike').value  = pStrike;
+      $el('ti-strike').value = pStrike.toFixed(2);
+    }
+    if (pDte !== null) { $el('s-dte').value = pDte; $el('ti-dte').value = pDte; }
+    if (pIv  !== null) {
+      const ivv = Math.min(120, pIv);
+      $el('s-iv').value = ivv; $el('ti-iv').value = ivv.toFixed(1);
+    }
+    calc();
+  };
+
+  if (pPrice !== null && pIv !== null) {
+    // Full pre-fill — apply immediately then still fetch catalyst in background
+    applyOverrides();
+    $el('fstatus').innerHTML    = `<span class="badge ok">✓ ${pTicker.toUpperCase()} (pre-filled)</span>`;
+    $el('fcompany').textContent = pTicker.toUpperCase();
+    // Fetch catalyst data even in pre-filled mode
+    fetch(window.__seApiUrl(`/catalyst/${pTicker}`), {signal: AbortSignal.timeout(14000)})
+      .then(r => r.ok ? r.json() : null)
+      .then(c => {
+        if (c && !c.error) {
+          catalystData = c;
+          renderCatalystStrip();
+          if (strategy === 'hedge') calcHedge();
+          calc(); // rebuild heatmap with implied move markers
+        }
+      })
+      .catch(() => {});
+  } else {
+    // Partial — fetch live data then overlay supplied params
+    fetchLive().then(applyOverrides).catch(applyOverrides);
+  }
+});
+</script>
+<script>
+(()=>{
+  const state=window.__se2=window.__se2||{
+    strategy:'call',currentView:'heatmap',catalystData:null,levelsData:null,quoteData:null,
+    liveTicker:'',currentPrem:0,entryLocked:false,currentContractIvKey:'',
+    currentContractIvMeta:null,contractIvTimer:null
+  };
+  const TIME_FRAC=[0,.15,.30,.50,.70,.85,1];
+  const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const el=id=>document.getElementById(id);
+  const val=id=>parseFloat(el(id).value);
+  const round=(n,d=1)=>{const p=10**d;return Math.round(n*p)/p;};
+  const fmtMoney=n=>(n>=0?'+$':'-$')+Math.abs(Math.round(n)).toLocaleString();
+  const compact=n=>!Number.isFinite(n)?'-':(n>=1e6?`${(n/1e6).toFixed(1)}m`:(n>=1e3?`${(n/1e3).toFixed(n>=1e4?0:1)}k`:`${Math.round(n)}`));
+  const optionType=()=>state.strategy==='put'?'put':'call';
+  const dateLabel=days=>{const d=new Date();d.setDate(d.getDate()+Math.round(days));return`${MONTHS[d.getMonth()]} ${d.getDate()}`;};
+  const expiryFromDte=dte=>{const d=new Date();d.setDate(d.getDate()+Math.round(dte));return d.toISOString().slice(0,10);};
+  const ivSourceLabel=src=>({bs_inversion:'Contract IV',yf_chain:'Chain IV',options_chain:'ATM IV',atm_fallback:'ATM IV',hv30_fallback:'HV30',prefill:'Preset IV'})[src]||'IV';
+  const fmtPctDist=n=>`${n.toFixed(n<1?2:1)}%`;
+  const wallMetric=wall=>{
+    if(Number.isFinite(Number(wall?.open_interest))&&Number(wall.open_interest)>0)return`${compact(Number(wall.open_interest))} OI`;
+    if(Number.isFinite(Number(wall?.volume))&&Number(wall.volume)>0)return`${compact(Number(wall.volume))} vol`;
+    if(Number.isFinite(Number(wall?.expiry_count))&&Number(wall.expiry_count)>0)return`${Number(wall.expiry_count)} exps`;
+    return'wall';
+  };
+  const levelName=level=>{
+    if(level.kind==='call')return`Call wall $${level.price.toFixed(2)}`;
+    if(level.kind==='put')return`Put wall $${level.price.toFixed(2)}`;
+    if(level.source==='prev_high')return`Prev High $${level.price.toFixed(2)}`;
+    if(level.source==='prev_low')return`Prev Low $${level.price.toFixed(2)}`;
+    return`${level.label} $${level.price.toFixed(2)}`;
+  };
+  const renderLevelTags=(levels,cls)=>!levels?.length?'':`<div class="hm-level-tags">${levels.map(level=>`<span class="${cls} ${level.kind}">${level.label}</span>`).join('')}</div>`;
+  const levelClasses=(levels,prefix)=>[
+    levels.some(level=>level.kind==='call')?`${prefix}-call`:'',
+    levels.some(level=>level.kind==='put')?`${prefix}-put`:'',
+    levels.some(level=>level.kind==='ma')?`${prefix}-ma`:''
+  ].filter(Boolean).join(' ');
+
+  function syncBounds(){
+    const s=parseFloat(el('ti-spot').value)||200;
+    const lo=Math.floor(s*.35),hi=Math.ceil(s*1.65);
+    el('s-strike').min=lo;el('s-strike').max=hi;
+  }
+  function setScenarioDefaults(price){
+    el('hm-lo').value=Math.round(price*0.85);el('hm-hi').value=Math.round(price*1.15);
+    if(el('chain-lo'))el('chain-lo').value=Math.round(price*0.85);
+    if(el('chain-hi'))el('chain-hi').value=Math.round(price*1.15);
+  }
+  function getHmRows(S){
+    const lo=parseFloat(el('hm-lo').value),hi=parseFloat(el('hm-hi').value);
+    if(!lo||!hi||lo<=0||hi<=lo){const rows=[];for(let p=-20;p<=20;p+=2)rows.push(p);return rows;}
+    const lowPct=(lo/S-1)*100,highPct=(hi/S-1)*100,span=highPct-lowPct,step=span<=15?0.5:span<=30?1:2;
+    const rows=[],start=Math.ceil(lowPct/step)*step;
+    for(let p=start;p<=highPct+step*0.01;p+=step)rows.push(round(p,1));
+    if(!rows.some(row=>Math.abs(row)<step*0.4)){rows.push(0);rows.sort((a,b)=>a-b);}
+    return rows.length?rows:[-10,-5,0,5,10];
+  }
+  function getChainRows(S){
+    const lo=parseFloat(el('chain-lo')?.value),hi=parseFloat(el('chain-hi')?.value);
+    let lowPct=-30,highPct=30;
+    if(lo&&hi&&lo>0&&hi>lo){lowPct=(lo/S-1)*100;highPct=(hi/S-1)*100;}
+    const span=highPct-lowPct,step=span<=12?1:span<=25?2:5,rows=[],seen=new Set(),start=Math.ceil(lowPct/step)*step;
+    for(let p=start;p<=highPct+step*0.01;p+=step){const strike=Math.round(S*(1+p/100)*2)/2,key=strike.toFixed(2);if(seen.has(key))continue;seen.add(key);rows.push({strike,pct:round((strike/S-1)*100,1)});}
+    const atmStrike=Math.round(S*2)/2,atmKey=atmStrike.toFixed(2);if(!seen.has(atmKey))rows.push({strike:atmStrike,pct:round((atmStrike/S-1)*100,1)});
+    rows.sort((a,b)=>a.strike-b.strike);return rows;
+  }
+  function overlayLevels(){
+    if(!state.levelsData)return[];
+    const levels=[],ma=state.levelsData.moving_averages||{},prev=state.levelsData.previous_session||{};
+    (state.levelsData.call_walls||[]).slice(0,3).forEach((wall,idx)=>levels.push({price:wall.strike,label:`Call wall ${wallMetric(wall)}`,kind:'call',source:'call_wall',priority:30-idx,open_interest:wall.open_interest,volume:wall.volume,expiry_count:wall.expiry_count}));
+    (state.levelsData.put_walls||[]).slice(0,3).forEach((wall,idx)=>levels.push({price:wall.strike,label:`Put wall ${wallMetric(wall)}`,kind:'put',source:'put_wall',priority:25-idx,open_interest:wall.open_interest,volume:wall.volume,expiry_count:wall.expiry_count}));
+    [['ema_21','EMA21',20],['sma_50','SMA50',19],['sma_200','SMA200',18],['ema_8','EMA8',17],['sma_20','SMA20',16]].forEach(([key,label,priority])=>{if(Number.isFinite(ma[key]))levels.push({price:ma[key],label,kind:'ma',source:key,priority});});
+    if(Number.isFinite(prev.high))levels.push({price:prev.high,label:'Prev High',kind:'ma',source:'prev_high',priority:15});
+    if(Number.isFinite(prev.low))levels.push({price:prev.low,label:'Prev Low',kind:'ma',source:'prev_low',priority:14});
+    return levels;
+  }
+  function classifyLevelForRead(level,S){
+    const deltaPct=(level.price/S-1)*100,distancePct=Math.abs(deltaPct);
+    let side='pivot';
+    if(level.kind==='call')side='resistance';
+    else if(level.kind==='put')side='support';
+    else if(deltaPct>=0.25)side='resistance';
+    else if(deltaPct<=-0.25)side='support';
+    const baseScore=level.kind==='call'?98:level.kind==='put'?96:({sma_200:80,sma_50:75,ema_21:73,sma_20:70,ema_8:67,prev_high:72,prev_low:72}[level.source]||68);
+    const flowMetric=Math.max(Number(level.open_interest)||0,Number(level.volume)||0,0);
+    const flowBoost=(level.kind==='call'||level.kind==='put')?Math.min(16,Math.log10(flowMetric+1)*6):0;
+    const proximityBoost=Math.max(0,16-distancePct*8);
+    return {...level,deltaPct,distancePct,side,score:baseScore+flowBoost+proximityBoost};
+  }
+  function pickLevelCluster(levels){
+    if(!levels.length)return null;
+    const sorted=[...levels].sort((a,b)=>a.distancePct-b.distancePct||b.score-a.score);
+    const anchor=sorted[0];
+    const cluster=sorted.filter(level=>Math.abs((level.price/anchor.price-1)*100)<=0.85||Math.abs(level.distancePct-anchor.distancePct)<=0.45).sort((a,b)=>b.score-a.score).slice(0,3);
+    const kindCount=new Set(cluster.map(level=>level.kind)).size;
+    const wallLed=cluster.some(level=>level.kind==='call'||level.kind==='put');
+    const prices=cluster.map(level=>level.price).sort((a,b)=>a-b);
+    const band=prices.length>1&&Math.abs(prices[prices.length-1]-prices[0])>0.11?`$${prices[0].toFixed(2)}-$${prices[prices.length-1].toFixed(2)}`:`$${anchor.price.toFixed(2)}`;
+    const score=cluster.reduce((sum,level,idx)=>sum+level.score-idx*4,0);
+    return{anchor,cluster,band,score,wallLed,confluence:kindCount>1||cluster.length>1,distancePct:anchor.distancePct};
+  }
+  function clusterNote(cluster,side){
+    if(!cluster)return side==='support'?'No nearby support cluster is mapped yet.':'No nearby resistance cluster is mapped yet.';
+    const lead=cluster.wallLed?'wall-led':'trend-led';
+    const dist=cluster.distancePct<0.12?'right on spot':`${fmtPctDist(cluster.distancePct)} ${side==='support'?'below':'above'} spot`;
+    const confluence=cluster.confluence?'Confluence':'Single level';
+    return `${confluence} around ${cluster.band} | ${lead} | ${dist}`;
+  }
+  function marketReadSummary(S){
+    if(!state.levelsData)return null;
+    const levels=overlayLevels().map(level=>classifyLevelForRead(level,S));
+    const support=pickLevelCluster(levels.filter(level=>level.side==='support'));
+    const resistance=pickLevelCluster(levels.filter(level=>level.side==='resistance'));
+    const pivots=levels.filter(level=>level.side==='pivot').sort((a,b)=>a.distancePct-b.distancePct||b.score-a.score);
+    let tone='Balanced map',toneClass='neutral',note='Walls usually matter most for the first reaction. EMAs and SMAs matter more when they stack in the same band.';
+    if(support&&resistance){
+      const bothTight=Math.max(support.distancePct,resistance.distancePct)<=1.2;
+      const scoreGap=Math.abs(support.score-resistance.score);
+      if(bothTight&&Math.abs(support.distancePct-resistance.distancePct)<=0.4&&scoreGap<=10){
+        tone='Compression zone';toneClass='neutral';
+        note='Support and resistance are both nearby, so price may chop between them until one side breaks with conviction.';
+      }else if((support.distancePct<=0.9&&support.score>=resistance.score-4)||support.score>=resistance.score+10){
+        tone='Support-led';toneClass='bull';
+        note=support.confluence?'Put wall and trend support are stacked close together. Pullbacks into that band are the cleaner risk-defined buy zone.':'Nearest support is doing more work than overhead resistance right now. Dips into that level are the better spot to lean on.';
+      }else if((resistance.distancePct<=0.9&&resistance.score>=support.score-4)||resistance.score>=support.score+10){
+        tone='Resistance-led';toneClass='bear';
+        note=resistance.confluence?'Call wall and trend resistance are clustered overhead. For longs, I would respect that supply band first.':'Overhead supply is closer than support, so the first reaction is more likely to stall there.';
+      }else{
+        tone='Two-sided';toneClass='neutral';
+        note='Neither side has a clean edge yet. Let the closer wall or MA cluster win before leaning too hard.';
+      }
+    }else if(support){
+      tone='Support in focus';toneClass='bull';
+      note='No nearby overhead cluster is stronger than the floor underneath price.';
+    }else if(resistance){
+      tone='Resistance in focus';toneClass='bear';
+      note='Overhead supply is the clearest nearby reference, so chasing into it deserves extra caution.';
+    }
+    if(pivots[0]&&pivots[0].distancePct<=0.3)note+=` Spot is also sitting almost directly on ${levelName(pivots[0])}, so expect quicker whipsaws until it resolves.`;
+    return{tone,toneClass,note,support,resistance};
+  }
+  function mapLevelsToHeatmapRows(rows,S){
+    const map=new Map(),overlays=overlayLevels(),step=rows.length>1?Math.max(0.25,Math.abs(rows[1]-rows[0])):1;
+    overlays.forEach(level=>{
+      const pct=(level.price/S-1)*100;let bestIdx=-1,bestDiff=Infinity;
+      rows.forEach((row,idx)=>{const diff=Math.abs(row-pct);if(diff<bestDiff){bestDiff=diff;bestIdx=idx;}});
+      if(bestIdx>=0&&bestDiff<=Math.max(0.4,step*0.7)){const current=map.get(bestIdx)||[];current.push(level);current.sort((a,b)=>b.priority-a.priority);map.set(bestIdx,current.slice(0,6));}
+    });
+    return map;
+  }
+  function renderCatalystStrip(){
+    const strip=el('catStrip'),data=state.catalystData;
+    if(!data||(!data.earnings_date&&!data.implied_move_pct)){strip.classList.add('hidden');return;}
+    strip.classList.remove('hidden');
+    el('catMain').textContent=data.earnings_date?`Earnings ${data.earnings_date}`:'No upcoming earnings found';
+    el('catSub').textContent=data.earnings_date&&data.days_to_earnings!=null?` - ${data.days_to_earnings} day${data.days_to_earnings===1?'':'s'} away`:'';
+    el('catImvPill').textContent=data.implied_move_pct!=null?`+/-${data.implied_move_pct}%`:'-';
+    el('catImvNote').textContent=data.implied_move_pct!=null?(data.straddle_expiry?`(${data.straddle_expiry} expiry)`:''):'chain data unavailable';
+  }
+  function renderLevelsStrip(){
+    const strip=el('levelsStrip'),data=state.levelsData;
+    if(!data){strip.classList.add('hidden');el('callWallPills').innerHTML='';el('putWallPills').innerHTML='';el('maPills').innerHTML='';el('refExpiryPills').innerHTML='';return;}
+    const S=parseFloat(el('ti-spot').value)||Number(data.price)||0,calls=(data.call_walls||[]).slice(0,3),puts=(data.put_walls||[]).slice(0,3),ma=data.moving_averages||{},maItems=[],refItems=[];
+    const nearestCallIdx=calls.length?calls.reduce((best,wall,idx,arr)=>Math.abs(wall.strike-S)<Math.abs(arr[best].strike-S)?idx:best,0):-1;
+    const nearestPutIdx=puts.length?puts.reduce((best,wall,idx,arr)=>Math.abs(wall.strike-S)<Math.abs(arr[best].strike-S)?idx:best,0):-1;
+    const maEntries=[['ema_21','EMA 21'],['sma_50','SMA 50'],['sma_200','SMA 200'],['ema_8','EMA 8'],['sma_20','SMA 20']].filter(([key])=>Number.isFinite(ma[key]));
+    const nearestMaKey=maEntries.reduce((best,[key])=>!best||Math.abs(ma[key]-S)<Math.abs(ma[best]-S)?key:best,'');
+    maEntries.forEach(([key,label])=>maItems.push(`<span class="lvl-pill ma ${key===nearestMaKey?'focus':''}">${label} $${ma[key].toFixed(2)}</span>`));
+    if(data.reference_expiry)refItems.push(`<span class="lvl-pill ref">${data.reference_expiry}</span>`);
+    if(data.reference_dte!=null)refItems.push(`<span class="lvl-pill ref">${data.reference_dte}d</span>`);
+    if(Array.isArray(data.source_expiries)&&data.source_expiries.length)refItems.push(`<span class="lvl-pill ref">${data.source_expiries.length} exps</span>`);
+    el('callWallPills').innerHTML=calls.length?calls.map((w,idx)=>`<span class="lvl-pill call ${idx===nearestCallIdx?'focus':''}">C ${w.strike.toFixed(2)} | ${wallMetric(w)}</span>`).join(''):'<span class="lvl-pill ref">No call wall</span>';
+    el('putWallPills').innerHTML=puts.length?puts.map((w,idx)=>`<span class="lvl-pill put ${idx===nearestPutIdx?'focus':''}">P ${w.strike.toFixed(2)} | ${wallMetric(w)}</span>`).join(''):'<span class="lvl-pill ref">No put wall</span>';
+    el('maPills').innerHTML=maItems.join('');el('refExpiryPills').innerHTML=refItems.join('');
+    if(!calls.length&&!puts.length&&!maItems.length&&!refItems.length)strip.classList.add('hidden');else strip.classList.remove('hidden');
+  }
+  function renderMarketRead(){
+    const wrap=el('marketRead');
+    if(!state.levelsData){wrap.classList.add('hidden');el('readSupportPills').innerHTML='';el('readResistancePills').innerHTML='';el('readSupportNote').textContent='';el('readResistanceNote').textContent='';return;}
+    const S=parseFloat(el('ti-spot').value)||Number(state.levelsData.price)||0;
+    const summary=marketReadSummary(S);
+    if(!summary){wrap.classList.add('hidden');return;}
+    el('readBiasTitle').textContent=summary.tone;
+    el('readBiasTitle').className=`read-v ${summary.toneClass}`;
+    el('readBiasNote').textContent=summary.note;
+    el('readSupportPills').innerHTML=summary.support?summary.support.cluster.map((level,idx)=>`<span class="lvl-pill ${level.kind==='ma'?'ma':'put'} ${idx===0?'focus':''}">${levelName(level)}</span>`).join(''):'<span class="lvl-pill ref">No nearby support</span>';
+    el('readResistancePills').innerHTML=summary.resistance?summary.resistance.cluster.map((level,idx)=>`<span class="lvl-pill ${level.kind==='ma'?'ma':'call'} ${idx===0?'focus':''}">${levelName(level)}</span>`).join(''):'<span class="lvl-pill ref">No nearby resistance</span>';
+    el('readSupportNote').textContent=clusterNote(summary.support,'support');
+    el('readResistanceNote').textContent=clusterNote(summary.resistance,'resistance');
+    wrap.classList.remove('hidden');
+  }
+  function updateHeaderMeta(){
+    if(!state.quoteData){el('fcompany').textContent='';return;}
+    const parts=[state.quoteData.company||state.liveTicker||el('tickerInput').value.toUpperCase().trim()];
+    if(state.currentContractIvMeta&&Number.isFinite(Number(state.currentContractIvMeta.iv_pct)))parts.push(`${ivSourceLabel(state.currentContractIvMeta.iv_source)} ${Number(state.currentContractIvMeta.iv_pct).toFixed(1)}%`);
+    else if(Number.isFinite(Number(state.quoteData.iv_pct)))parts.push(`${ivSourceLabel(state.quoteData.iv_source)} ${Number(state.quoteData.iv_pct).toFixed(1)}%`);
+    if(state.levelsData?.reference_expiry)parts.push(`Walls ${state.levelsData.reference_expiry}`);
+    el('fcompany').textContent=parts.join(' | ');
+  }
+  function buildHeatmap(S,K,dte,iv,rate,qty,type,entryPrem){
+    const scale=entryPrem*qty*100,rows=getHmRows(S),levelMap=mapLevelsToHeatmapRows(rows,S);let eColIdx=-1,imvUpRowIdx=-1,imvDnRowIdx=-1,imvPct=0;
+    if(state.catalystData){const dteE=state.catalystData.days_to_earnings,imv=state.catalystData.implied_move_pct;if(dteE!=null&&dteE>0&&dteE<=dte){const frac=dteE/dte;let best=Infinity;TIME_FRAC.forEach((f,idx)=>{const diff=Math.abs(f-frac);if(diff<best){best=diff;eColIdx=idx;}});}if(imv!=null&&imv>0){imvPct=imv;let bestUp=Infinity,bestDn=Infinity;rows.forEach((row,idx)=>{const upDiff=Math.abs(row-imv),dnDiff=Math.abs(row+imv);if(upDiff<bestUp){bestUp=upDiff;imvUpRowIdx=idx;}if(dnDiff<bestDn){bestDn=dnDiff;imvDnRowIdx=idx;}});}}
+    let html='<thead><tr><th style="min-width:96px"></th>';TIME_FRAC.forEach((f,idx)=>{const daysElapsed=Math.round(dte*f),isE=idx===eColIdx,isLast=idx===TIME_FRAC.length-1,label=idx===0?'Now':(isLast?`${dateLabel(dte)} *`:dateLabel(daysElapsed)),dteRemaining=dte-daysElapsed;html+=`<th${isE?' class="ecol"':''}>${label}${isE?' <span style="color:var(--gold);font-size:8px">v</span>':''}<br><span style="font-size:8px;color:${isE?'var(--gold)':'var(--text3)'}">${idx===0?'today':isLast?'expiry':`${dteRemaining}d left`}</span></th>`;});html+='</tr></thead><tbody>';
+    rows.forEach((pct,ri)=>{const price=S*(1+pct/100),isCur=Math.abs(pct)<0.001,isUp=ri===imvUpRowIdx,isDn=ri===imvDnRowIdx,rowLevels=levelMap.get(ri)||[],rowKinds=new Set(rowLevels.map(level=>level.kind)),isStack=rowLevels.length>1||rowKinds.size>1,rowClasses=[isCur?'cr':'',levelClasses(rowLevels,'level'),isStack?'level-stack':''].filter(Boolean).join(' ');let label=isCur?'NOW':(pct>0?`+${pct}%`:`${pct}%`);if(isUp&&imvPct>0)label+=' <span style="color:var(--greentext);font-size:8px">up</span>';if(isDn&&imvPct>0)label+=' <span style="color:var(--redtext);font-size:8px">dn</span>';const priceLabel=`<span style="font-size:8px;color:${isCur?'var(--blue)':'var(--text3)'};display:block;margin-top:1px">$${price.toFixed(2)}</span>`;html+=`<tr class="${rowClasses}"><td class="rl">${label}${priceLabel}${renderLevelTags(rowLevels,'hm-level-tag')}</td>`;TIME_FRAC.forEach((f,ci)=>{const remT=Math.max(0,(dte*(1-f))/365),scenPrem=bs(price,K,remT,rate,iv,type),pnl=(scenPrem-entryPrem)*qty*100,bg=cellColor(pnl,scale),pctReturn=entryPrem*qty*100!==0?pnl/(entryPrem*qty*100)*100:0,pctStr=(pctReturn>=0?'+':'')+pctReturn.toFixed(0)+'%',isE=ci===eColIdx,isPinUp=isUp&&isE,isPinDn=isDn&&isE;let cls='';if(isE)cls+=' ecol';if(isUp)cls+=' imv-up';if(isDn)cls+=' imv-dn';if(isPinUp||isPinDn)cls+=' imv-pin';const arrow=isPinUp?'<span class="imv-arrow" style="color:var(--greentext)">^</span>':(isPinDn?'<span class="imv-arrow" style="color:var(--redtext)">v</span>':'');html+=`<td class="${cls.trim()}" style="background:${bg}"><span style="font-family:var(--mono)">${fmtMoney(pnl)}</span><span class="hmtt">${pctStr} return</span>${arrow}</td>`;});html+='</tr>';});
+    html+='</tbody>';el('hmTable').innerHTML=html;
+    const legend=[];if(eColIdx>=0&&state.catalystData)legend.push(`<span style="color:var(--gold)">gold col = earnings in ${state.catalystData.days_to_earnings}d</span>`);if(imvPct>0)legend.push(`<span style="color:var(--greentext)">+${imvPct}%</span><span style="color:var(--text3)"> / </span><span style="color:var(--redtext)">-${imvPct}%</span><span style="color:var(--text3)"> = implied move rows</span>`);if(state.levelsData)legend.push(`<span style="color:var(--redtext)">red = call walls</span><span style="color:var(--text3)"> | </span><span style="color:var(--greentext)">green = put walls</span><span style="color:var(--text3)"> | </span><span style="color:var(--blue)">blue = trend / prior session</span><span style="color:var(--text3)"> | </span><span style="color:var(--yellow)">gold accent = confluence</span>`);el('hmLegend').innerHTML=legend.join('<span style="margin:0 8px"></span>');
+  }
+  function buildChain(S,dte,iv,rate,type){
+    const exps=[7,14,21,30,45,60,90,120,180,240,270,360],rows=getChainRows(S),selK=parseFloat(el('ti-strike').value)||S,overlays=overlayLevels(),rowTolerance=Math.max(0.5,S*0.006);let html='<thead><tr><th>Strike</th>';exps.forEach(days=>html+=`<th>${days}d</th>`);html+='</tr></thead><tbody>';
+    rows.forEach(row=>{const K=row.strike,pct=row.pct,isATM=Math.abs(pct)<=0.75,isSel=Math.abs(K-selK)<=Math.max(0.5,S*0.0075),itm=type==='call'?K<S:K>S,rowLevels=overlays.filter(level=>Math.abs(level.price-K)<=rowTolerance).slice(0,3),rowKinds=new Set(rowLevels.map(level=>level.kind)),rowClass=[isATM?'atm':'',isSel?'sel':'',levelClasses(rowLevels,'wall'),rowLevels.length>1||rowKinds.size>1?'level-stack':''].filter(Boolean).join(' '),pctLabel=Math.abs(pct)<0.05?'ATM':(pct>0?`+${pct}%`:`${pct}%`);html+=`<tr class="${rowClass}"><td class="slbl">${K.toFixed(2)}<br><span style="font-size:8px">${pctLabel}</span>${renderLevelTags(rowLevels,'hm-level-tag')}</td>`;exps.forEach(days=>{const T=days/365,prem=bs(S,K,T,rate,iv,type),g2=greeks(S,K,T,rate,iv,type);html+=`<td ${itm?'class="itm"':''}>$${prem.toFixed(2)}<br><span style="font-size:8px;color:var(--text3)">${g2.delta>=0?'+':''}${g2.delta.toFixed(2)}d</span></td>`;});html+='</tr>';});
+    el('chainTable').innerHTML=html+'</tbody>';
+  }
+  function calcHedge(){
+    const S=parseFloat(el('ti-spot').value)||200,K=parseFloat(el('ti-strike').value)||200,dte=val('s-dte'),iv=val('s-iv')/100,rate=val('s-rate')/100,T=dte/365,leapG=greeks(S,K,T,rate,iv,'call'),leapEntry=(state.entryLocked?(parseFloat(el('lockInput').value)||state.currentPrem):state.currentPrem),leapQty=val('s-qty'),leapCost=leapEntry*leapQty*100,totDelta=leapG.delta*leapQty*100,dispEntry=state.entryLocked?(parseFloat(el('lockInput').value)||leapEntry):leapEntry;
+    el('hv-entry-display').textContent='$'+dispEntry.toFixed(2);el('hv-qty-display').textContent=leapQty;el('hv-cost').textContent='-$'+leapCost.toLocaleString(undefined,{maximumFractionDigits:0});el('hv-delta').textContent=leapG.delta.toFixed(3);el('hv-totd').textContent='+'+totDelta.toFixed(0)+' shares equiv';
+    const pdte=val('hs-pdte'),pctB=val('hs-pstk'),hrat=val('hs-hrat')/100,putK=S*(1-pctB/100),putT=pdte/365,putPrem=bs(S,putK,putT,rate,iv,'put'),putG=greeks(S,putK,putT,rate,iv,'put'),putsN=Math.max(1,Math.ceil((totDelta*hrat)/Math.abs(putG.delta*100))),putCost=putsN*putPrem*100;
+    el('hv-pdte').textContent=pdte+'d';el('hv-pstk').textContent='-'+pctB+'%';el('hv-hrat').textContent=val('hs-hrat')+'%';el('hedgeOutput').innerHTML=`<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Contracts needed</div><div class="hbig">${putsN} puts</div><div style="font-size:11px;color:var(--text2);margin-top:5px">Strike $${putK.toFixed(2)} | Delta ${putG.delta.toFixed(3)} | $${putPrem.toFixed(2)}/shr</div><div style="font-size:11px;margin-top:3px" class="neg">Hedge cost: -$${putCost.toLocaleString(undefined,{maximumFractionDigits:0})}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">${val('hs-hrat')}% hedge | ${leapQty} contracts</div>`;
+    const imvPct=state.catalystData?.implied_move_pct??null,banner=el('imvBanner');if(imvPct!=null&&imvPct>0){banner.classList.add('show');el('imvBannerVal').textContent=`+/-${imvPct}%`;}else banner.classList.remove('show');
+    const currentLeapMark=bs(S,K,T,rate,iv,'call'),moves=[20,15,10,7,5,3,0,-3,-5,-7,-10,-15,-20];let tbody='';
+    moves.forEach(move=>{const newS=S*(1+move/100),remT=Math.max(0.001,(dte-pdte)/365),newLP=bs(newS,K,remT,rate,iv,'call'),leapMktDelta=(newLP-currentLeapMark)*leapQty*100,leapVsEntry=(newLP-leapEntry)*leapQty*100,payoff=Math.max(0,putK-newS),putPnl=(payoff-putPrem)*putsN*100,net=putPnl+leapMktDelta,pp=putPnl>=0?'pos':'neg',lm=leapMktDelta>=0?'pos':'neg',np=net>=0?'pos':'neg',ve=leapVsEntry>=0?'pos':'neg',isImvUp=imvPct!=null&&move>0&&Math.abs(move-imvPct)<2.5,isImvDn=imvPct!=null&&move<0&&Math.abs(move+imvPct)<2.5,isImv=isImvUp||isImvDn,imvTag=isImvUp?' | up imv':(isImvDn?' | dn imv':''),moveLbl=move===0?'Flat':(move>0?`+${move}%`:`${move}%`);tbody+=`<tr${isImv?' class="imv-row"':''}><td>${moveLbl}${imvTag}</td><td class="${pp}">${putPnl>=0?'+':'-'}$${Math.abs(Math.round(putPnl)).toLocaleString()}</td><td class="${lm}">${leapMktDelta>=0?'+':'-'}$${Math.abs(Math.round(leapMktDelta)).toLocaleString()}</td><td class="${np}" style="font-weight:700">${net>=0?'+':'-'}$${Math.abs(Math.round(net)).toLocaleString()}</td><td class="${ve}" style="font-size:9px;color:${leapVsEntry>=0?'var(--greentext)':'var(--redtext)'}">${leapVsEntry>=0?'+':'-'}$${Math.abs(Math.round(leapVsEntry)).toLocaleString()}</td></tr>`;});
+    el('scenBody').innerHTML=tbody;
+  }
+  function calc(){
+    const S=parseFloat(el('ti-spot').value)||200,K=parseFloat(el('ti-strike').value)||200,dte=val('s-dte'),iv=val('s-iv')/100,qty=val('s-qty'),rate=val('s-rate')/100,T=dte/365,type=optionType();
+    el('v-qty').textContent=qty;el('v-rate').textContent=val('s-rate').toFixed(1)+'%';
+    const prem=bs(S,K,T,rate,iv,type),g=greeks(S,K,T,rate,iv,type),totalCost=prem*qty*100,be=type==='call'?K+prem:K-prem,intr=type==='call'?Math.max(0,S-K):Math.max(0,K-S),tv=prem-intr,mono=type==='call'?((S-K)/K*100):((K-S)/K*100),thetaDol=g.theta*qty*100,d50=prem>0&&Math.abs(g.theta)>0?Math.round(prem*0.5/Math.abs(g.theta)):'-';
+    state.currentPrem=prem;el('m-prem').textContent='$'+prem.toFixed(2)+'/shr';el('m-be').textContent='$'+be.toFixed(2);el('m-ml').textContent='-$'+totalCost.toLocaleString(undefined,{maximumFractionDigits:0});el('m-del').textContent=g.delta.toFixed(3);
+    el('i-prem').textContent='$'+prem.toFixed(2);el('i-cost').textContent='-$'+totalCost.toLocaleString(undefined,{maximumFractionDigits:0});el('i-be').textContent='$'+be.toFixed(2);el('i-intr').textContent='$'+intr.toFixed(2);el('i-time').textContent='$'+tv.toFixed(2);el('i-money').innerHTML=mono>=0?`<span class="pos">+${mono.toFixed(1)}% ITM</span>`:`<span class="neg">${mono.toFixed(1)}% OTM</span>`;el('i-thetadol').textContent=thetaDol.toFixed(2);el('i-d50').textContent=typeof d50==='number'?`${d50}d`:d50;
+    el('g-d').textContent=g.delta.toFixed(3);el('g-g').textContent=g.gamma.toFixed(4);el('g-t').textContent=g.theta.toFixed(3);el('g-v').textContent=g.vega.toFixed(3);el('g-r').textContent=g.rho.toFixed(3);
+    renderLevelsStrip();renderMarketRead();
+    if(!state.entryLocked)el('hv-entry-display').textContent='$'+prem.toFixed(2);el('hv-qty-display').textContent=qty;
+    if(state.currentView==='heatmap')buildHeatmap(S,K,dte,iv,rate,qty,type,prem);else buildChain(S,dte,iv,rate,type);
+    if(state.strategy==='hedge')calcHedge();
+    scheduleContractIvSync();
+  }
+  function getContractIvKey(){
+    const ticker=el('tickerInput').value.toUpperCase().trim();if(!ticker||!state.liveTicker||ticker!==state.liveTicker)return'';const strike=parseFloat(el('ti-strike').value),dte=parseInt(el('ti-dte').value,10)||val('s-dte');if(!Number.isFinite(strike)||!Number.isFinite(dte)||dte<=0)return'';return[ticker,optionType(),strike.toFixed(2),expiryFromDte(dte)].join('|');
+  }
+  function scheduleContractIvSync(){
+    clearTimeout(state.contractIvTimer);const key=getContractIvKey();if(!key||key===state.currentContractIvKey)return;state.contractIvTimer=setTimeout(()=>syncLiveContractIv(key),300);
+  }
+  async function syncLiveContractIv(requestKey){
+    if(!requestKey||requestKey===state.currentContractIvKey)return;const parts=requestKey.split('|');if(parts.length!==4)return;const[ticker,optType,strike,expiry]=parts;
+    try{const params=new URLSearchParams({strike,expiry,option_type:optType}),res=await fetch(`${window.__seApiUrl(`/option_iv/${ticker}`)}?${params.toString()}`,{signal:AbortSignal.timeout(8000)});if(!res.ok)return;const data=await res.json();if(data.error||requestKey!==getContractIvKey())return;state.currentContractIvMeta=data;state.currentContractIvKey=requestKey;state.quoteData={...(state.quoteData||{}),iv_pct:data.iv_pct,iv_source:data.iv_source};updateHeaderMeta();const nextIv=Number(data.iv_pct);if(Number.isFinite(nextIv)){const clamped=Math.min(200,nextIv);if(clamped>parseFloat(el('s-iv').max))el('s-iv').max=Math.ceil(clamped);if(Math.abs(clamped-(parseFloat(el('ti-iv').value)||0))>0.05){el('s-iv').value=clamped;el('ti-iv').value=clamped.toFixed(1);calc();}}}catch(_err){}
+  }
+  async function fetchLive(){
+    const ticker=el('tickerInput').value.toUpperCase().trim();if(!ticker)return null;
+    el('fstatus').innerHTML='<span class="badge idle">Fetching...</span>';el('fcompany').textContent='';state.liveTicker=ticker;state.quoteData=null;state.catalystData=null;state.levelsData=null;state.currentContractIvKey='';state.currentContractIvMeta=null;renderCatalystStrip();renderLevelsStrip();renderMarketRead();
+    try{const[qRes,cRes,lRes]=await Promise.all([fetch(window.__seApiUrl(`/quote/${ticker}`),{signal:AbortSignal.timeout(8000)}),fetch(window.__seApiUrl(`/catalyst/${ticker}`),{signal:AbortSignal.timeout(14000)}),fetch(window.__seApiUrl(`/levels/${ticker}`),{signal:AbortSignal.timeout(14000)})]);if(!qRes.ok)throw new Error('HTTP '+qRes.status);const q=await qRes.json();if(q.error)throw new Error(q.error);state.quoteData=q;if(cRes.ok){const c=await cRes.json();if(!c.error)state.catalystData=c;}if(lRes.ok){const l=await lRes.json();if(!l.error)state.levelsData=l;}const p=q.price,lo=Math.floor(p*.35),hi=Math.ceil(p*1.65);el('s-spot').min=lo;el('s-spot').max=hi;el('s-spot').value=p;el('ti-spot').value=p.toFixed(2);el('s-strike').min=lo;el('s-strike').max=hi;el('s-strike').value=Math.round(p);el('ti-strike').value=Math.round(p).toFixed(2);setScenarioDefaults(p);if(Number.isFinite(Number(q.iv_pct))){const ivv=Math.min(200,Number(q.iv_pct));if(ivv>parseFloat(el('s-iv').max))el('s-iv').max=Math.ceil(ivv);el('s-iv').value=ivv;el('ti-iv').value=ivv.toFixed(1);}syncBounds();renderCatalystStrip();renderLevelsStrip();updateHeaderMeta();calc();el('fstatus').innerHTML=`<span class="badge ok">${ticker} live</span>`;return q;}catch(err){state.liveTicker='';el('fstatus').innerHTML='<span class="badge err">Server offline</span>';el('fcompany').textContent='Run options_calc_server.py first';throw err;}
+  }
+  function setStrat(s,btn){state.strategy=s;document.querySelectorAll('.strat-tab').forEach(tab=>tab.classList.remove('on'));btn.classList.add('on');el('hedgeSection').style.display=s==='hedge'?'block':'none';el('l-strike').textContent=s==='put'?'Put strike ($)':'Strike ($)';calc();}
+  function setView(v,btn){state.currentView=v;document.querySelectorAll('.vt').forEach(tab=>tab.classList.remove('on'));btn.classList.add('on');el('view-heatmap').style.display=v==='heatmap'?'block':'none';el('view-chain').style.display=v==='chain'?'block':'none';calc();}
+  function resetHmRange(){el('hm-lo').value='';el('hm-hi').value='';calc();}
+  function resetChainRange(){el('chain-lo').value='';el('chain-hi').value='';calc();}
+  function syncSlider(field){if(field==='spot')el('ti-spot').value=parseFloat(el('s-spot').value).toFixed(2);if(field==='strike')el('ti-strike').value=parseFloat(el('s-strike').value).toFixed(2);if(field==='dte')el('ti-dte').value=el('s-dte').value;if(field==='iv')el('ti-iv').value=parseFloat(el('s-iv').value).toFixed(1);}
+  function syncTypeIn(field){if(field==='spot'){let v=parseFloat(el('ti-spot').value)||200;v=Math.max(1,Math.min(5000,v));el('ti-spot').value=v.toFixed(2);if(v>parseFloat(el('s-spot').max))el('s-spot').max=Math.ceil(v*1.3);if(v<parseFloat(el('s-spot').min))el('s-spot').min=Math.max(1,Math.floor(v*0.7));el('s-spot').value=v;syncBounds();calc();}else if(field==='strike'){let v=parseFloat(el('ti-strike').value)||200;v=Math.max(1,Math.min(5000,v));el('ti-strike').value=v.toFixed(2);if(v>parseFloat(el('s-strike').max))el('s-strike').max=Math.ceil(v*1.3);if(v<parseFloat(el('s-strike').min))el('s-strike').min=Math.max(1,Math.floor(v*0.7));el('s-strike').value=v;calc();}else if(field==='dte'){let v=parseInt(el('ti-dte').value,10)||180;v=Math.max(1,Math.min(730,v));el('ti-dte').value=v;el('s-dte').value=v;calc();}else if(field==='iv'){let v=parseFloat(el('ti-iv').value)||30;v=Math.max(0.1,Math.min(200,v));if(v>parseFloat(el('s-iv').max))el('s-iv').max=Math.ceil(v);el('ti-iv').value=v.toFixed(1);el('s-iv').value=v;calc();}}
+  function toggleLock(){state.entryLocked=!state.entryLocked;const btn=el('lockBtn'),wrap=el('lockInputWrap');if(state.entryLocked){btn.textContent='Locked';btn.classList.add('locked');wrap.style.display='block';el('lockInput').value=state.currentPrem.toFixed(2);el('hv-entry-src').textContent='manual override';}else{btn.textContent='Lock';btn.classList.remove('locked');wrap.style.display='none';el('hv-entry-src').textContent='synced to premium';}calcHedge();}
+
+  Object.assign(window,{fetchLive,setStrat,setView,calc,calcHedge,syncTypeIn,syncSlider,resetHmRange,resetChainRange,syncBounds,toggleLock});
+  syncBounds();calc();
+
+  window.addEventListener('DOMContentLoaded',()=>{
+    const p=new URLSearchParams(window.location.search),pTicker=p.get('ticker'),pPrice=p.get('price')!==null?parseFloat(p.get('price')):null,pStrike=p.get('strike')!==null?parseFloat(p.get('strike')):null,pDte=p.get('dte')!==null?parseInt(p.get('dte'),10):null,pIv=p.get('iv')!==null?parseFloat(p.get('iv')):null;
+    if(!pTicker)return;const ticker=pTicker.toUpperCase();el('tickerInput').value=ticker;
+    const applyOverrides=()=>{if(pPrice!==null){const lo=Math.floor(pPrice*0.35),hi=Math.ceil(pPrice*1.65);el('s-spot').min=lo;el('s-spot').max=hi;el('s-spot').value=pPrice;el('ti-spot').value=pPrice.toFixed(2);el('s-strike').min=lo;el('s-strike').max=hi;setScenarioDefaults(pPrice);}if(pStrike!==null){el('s-strike').value=pStrike;el('ti-strike').value=pStrike.toFixed(2);}if(pDte!==null){el('s-dte').value=pDte;el('ti-dte').value=pDte;}if(pIv!==null){const ivv=Math.min(200,pIv);if(ivv>parseFloat(el('s-iv').max))el('s-iv').max=Math.ceil(ivv);el('s-iv').value=ivv;el('ti-iv').value=ivv.toFixed(1);}syncBounds();calc();};
+    if(pPrice!==null&&pIv!==null){state.liveTicker=ticker;state.quoteData={ticker,company:ticker,iv_pct:pIv,iv_source:'prefill'};applyOverrides();updateHeaderMeta();el('fstatus').innerHTML=`<span class="badge ok">${ticker} pre-filled</span>`;Promise.all([fetch(window.__seApiUrl(`/catalyst/${ticker}`),{signal:AbortSignal.timeout(14000)}).then(r=>r.ok?r.json():null).catch(()=>null),fetch(window.__seApiUrl(`/levels/${ticker}`),{signal:AbortSignal.timeout(14000)}).then(r=>r.ok?r.json():null).catch(()=>null)]).then(([c,l])=>{if(c&&!c.error)state.catalystData=c;if(l&&!l.error)state.levelsData=l;renderCatalystStrip();renderLevelsStrip();renderMarketRead();updateHeaderMeta();calc();}).catch(()=>{});}
+  });
+})();
+</script>
+</body>
+</html>
