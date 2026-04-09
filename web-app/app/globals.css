@@ -177,6 +177,192 @@ a {
   gap: 16px;
 }
 
+.native-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.native-card {
+  display: grid;
+  gap: 14px;
+}
+
+.native-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.native-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.spot-pill,
+.catalyst-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-weight: 800;
+  border: 1px solid rgba(99, 167, 255, 0.24);
+  background: rgba(99, 167, 255, 0.12);
+  color: var(--text);
+}
+
+.catalyst-pill {
+  border-color: rgba(244, 193, 95, 0.24);
+  background: rgba(244, 193, 95, 0.12);
+  color: var(--gold);
+}
+
+.metric-grid,
+.read-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric-box,
+.read-box {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(8, 14, 22, 0.82);
+}
+
+.metric-box span,
+.level-kicker {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.metric-box strong,
+.read-box strong {
+  display: block;
+  font-size: 1.14rem;
+}
+
+.metric-box small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.catalyst-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(244, 193, 95, 0.24);
+  background: linear-gradient(180deg, rgba(77, 56, 9, 0.72), rgba(52, 38, 7, 0.6));
+}
+
+.level-section {
+  display: grid;
+  gap: 8px;
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pill-row.compact {
+  gap: 6px;
+}
+
+.lvl-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: rgba(8, 14, 22, 0.9);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.lvl-pill.call {
+  color: #ff8f86;
+  border-color: rgba(255, 128, 120, 0.3);
+  background: rgba(77, 26, 23, 0.52);
+}
+
+.lvl-pill.put {
+  color: #78e39d;
+  border-color: rgba(103, 209, 143, 0.28);
+  background: rgba(19, 62, 34, 0.48);
+}
+
+.lvl-pill.ma {
+  color: var(--blue);
+  border-color: rgba(99, 167, 255, 0.3);
+  background: rgba(22, 45, 77, 0.42);
+}
+
+.lvl-pill.ref {
+  color: var(--gold);
+  border-color: rgba(244, 193, 95, 0.24);
+  background: rgba(68, 53, 17, 0.42);
+}
+
+.lvl-pill.focus {
+  box-shadow: 0 0 0 1px rgba(244, 193, 95, 0.35), 0 0 18px rgba(244, 193, 95, 0.16);
+}
+
+.read-box {
+  display: grid;
+  gap: 10px;
+}
+
+.read-box p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.read-box.bull {
+  border-color: rgba(103, 209, 143, 0.25);
+  background: linear-gradient(180deg, rgba(18, 46, 30, 0.62), rgba(9, 20, 16, 0.76));
+}
+
+.read-box.bear {
+  border-color: rgba(255, 128, 120, 0.24);
+  background: linear-gradient(180deg, rgba(58, 23, 20, 0.58), rgba(21, 10, 11, 0.78));
+}
+
+.read-box.support {
+  border-color: rgba(103, 209, 143, 0.18);
+}
+
+.read-box.resistance {
+  border-color: rgba(255, 128, 120, 0.18);
+}
+
+.native-error {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 128, 120, 0.28);
+  background: rgba(59, 16, 18, 0.55);
+  color: var(--red);
+  font-size: 0.9rem;
+}
+
 .stack-list {
   margin: 0;
   padding-left: 18px;
@@ -188,6 +374,12 @@ a {
 
 .launch-grid {
   display: grid;
+  gap: 12px;
+}
+
+.mini-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -303,12 +495,20 @@ a {
 
 @media (max-width: 1080px) {
   .hero-card,
+  .native-grid,
   .shell-grid {
     grid-template-columns: 1fr;
   }
 
+  .metric-grid,
+  .read-grid {
+    grid-template-columns: 1fr;
+  }
+
   .shell-top,
-  .surface-head {
+  .surface-head,
+  .native-head,
+  .catalyst-strip {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -339,5 +539,9 @@ a {
 
   .iframe-wrap iframe {
     min-height: 520px;
+  }
+
+  .mini-field-grid {
+    grid-template-columns: 1fr;
   }
 }
