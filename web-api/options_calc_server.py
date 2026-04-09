@@ -12,12 +12,9 @@ import traceback
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
-import numpy as np
 
 for proxy_key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
     os.environ.pop(proxy_key, None)
-
-import yfinance as yf
 
 
 app = FastAPI(title="SwingEdge Options Calculator", version="1.2")
@@ -25,6 +22,16 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML_FILE = os.path.join(SCRIPT_DIR, "options_calculator.html")
+
+
+def _get_yf():
+    import yfinance as yf
+
+    return yf
+
+
+def _ticker(symbol: str):
+    return _get_yf().Ticker(symbol.upper().strip())
 
 
 @app.get("/")
@@ -42,7 +49,7 @@ def root(ticker: str | None = None, price: float | None = None,
     When price + iv are both present the live yfinance fetch is skipped.
     """
     if os.path.exists(HTML_FILE):
-            with open(HTML_FILE, "r", encoding="utf-8") as f:
+        with open(HTML_FILE, "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     return {
         "name": "SwingEdge Options API",
@@ -205,8 +212,18 @@ def get_hv30(ticker_obj) -> float | None:
         hist = ticker_obj.history(period="3mo")
         if hist.empty or len(hist) < 22:
             return None
-        log_ret = np.log(hist["Close"] / hist["Close"].shift(1)).dropna()
-        hv = float(log_ret.tail(21).std() * math.sqrt(252) * 100)
+        closes = [float(x) for x in hist["Close"].dropna().tolist() if x and float(x) > 0]
+        if len(closes) < 22:
+            return None
+
+        log_ret = [math.log(curr / prev) for prev, curr in zip(closes, closes[1:]) if prev > 0 and curr > 0]
+        if len(log_ret) < 21:
+            return None
+
+        sample = log_ret[-21:]
+        mean = sum(sample) / len(sample)
+        variance = sum((value - mean) ** 2 for value in sample) / (len(sample) - 1)
+        hv = math.sqrt(variance) * math.sqrt(252) * 100
         return round(hv, 1)
     except Exception:
         return None
@@ -380,7 +397,7 @@ def _extract_market_levels(ticker_obj, price: float, days_to_earnings: int | Non
 @app.get("/quote/{ticker}")
 def quote(ticker: str):
     try:
-        t = yf.Ticker(ticker.upper().strip())
+        t = _ticker(ticker)
         info = t.info
         price = _get_last_price(t, info)
         if price is None:
@@ -409,7 +426,7 @@ def quote(ticker: str):
 @app.get("/catalyst/{ticker}")
 def catalyst(ticker: str):
     try:
-        t = yf.Ticker(ticker.upper().strip())
+        t = _ticker(ticker)
         info = t.info
         price = _get_last_price(t, info)
         if price is None:
@@ -465,7 +482,7 @@ def catalyst(ticker: str):
 @app.get("/levels/{ticker}")
 def levels(ticker: str):
     try:
-        t = yf.Ticker(ticker.upper().strip())
+        t = _ticker(ticker)
         info = t.info
         price = _get_last_price(t, info)
         if price is None:
@@ -495,7 +512,7 @@ def levels(ticker: str):
 def option_iv(ticker: str, strike: float | None = None,
               expiry: str | None = None, option_type: str = "call"):
     try:
-        t = yf.Ticker(ticker.upper().strip())
+        t = _ticker(ticker)
         info = t.info
         price = _get_last_price(t, info)
         if price is None:
