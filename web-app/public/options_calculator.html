@@ -959,8 +959,8 @@ async function fetchLive(){
       $el('ti-iv').value=ivv.toFixed(1);
     }
     $el('fstatus').innerHTML=`<span class="badge ok">✓ ${t} live</span>`;
-    const src=q.iv_source==='hv30_fallback'?' (HV30)':' (ATM IV)';
-    $el('fcompany').textContent=`${q.company||t} · IV${src} ${q.iv_pct?q.iv_pct.toFixed(1)+'%':'—'}`;
+    const src=q.iv_source==='hv30_fallback'?'HV30':(q.iv_source==='options_chain'?'ATM proxy':'IV');
+    $el('fcompany').textContent=`${q.company||t} | ${src} ${q.iv_pct?q.iv_pct.toFixed(1)+'%':'—'}`;
     if(cRes.ok){const c=await cRes.json();if(!c.error)catalystData=c;}
     renderCatalystStrip();
     calc();
@@ -1052,8 +1052,8 @@ window.addEventListener('DOMContentLoaded', () => {
   const ivSourceLabel=src=>({bs_inversion:'Contract IV',yf_chain:'Chain IV',options_chain:'ATM IV',atm_fallback:'ATM IV',hv30_fallback:'HV30',prefill:'Preset IV'})[src]||'IV';
   const fmtPctDist=n=>`${n.toFixed(n<1?2:1)}%`;
   const wallMetric=wall=>{
-    if(Number.isFinite(Number(wall?.open_interest))&&Number(wall.open_interest)>0)return`${compact(Number(wall.open_interest))} OI`;
-    if(Number.isFinite(Number(wall?.volume))&&Number(wall.volume)>0)return`${compact(Number(wall.volume))} vol`;
+    if(Number.isFinite(Number(wall?.open_interest))&&Number(wall.open_interest)>0)return`Yahoo OI ${compact(Number(wall.open_interest))}`;
+    if(Number.isFinite(Number(wall?.volume))&&Number(wall.volume)>0)return`Yahoo vol ${compact(Number(wall.volume))}`;
     if(Number.isFinite(Number(wall?.expiry_count))&&Number(wall.expiry_count)>0)return`${Number(wall.expiry_count)} exps`;
     return'wall';
   };
@@ -1229,6 +1229,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const parts=[state.quoteData.company||state.liveTicker||el('tickerInput').value.toUpperCase().trim()];
     if(state.currentContractIvMeta&&Number.isFinite(Number(state.currentContractIvMeta.iv_pct)))parts.push(`${ivSourceLabel(state.currentContractIvMeta.iv_source)} ${Number(state.currentContractIvMeta.iv_pct).toFixed(1)}%`);
     else if(Number.isFinite(Number(state.quoteData.iv_pct)))parts.push(`${ivSourceLabel(state.quoteData.iv_source)} ${Number(state.quoteData.iv_pct).toFixed(1)}%`);
+    if(state.currentContractIvMeta&&Number.isFinite(Number(state.currentContractIvMeta.previous_contract_iv_pct)))parts.push(`Yday ${Number(state.currentContractIvMeta.previous_contract_iv_pct).toFixed(1)}%`);
     if(state.levelsData?.reference_expiry)parts.push(`Walls ${state.levelsData.reference_expiry}`);
     el('fcompany').textContent=parts.join(' | ');
   }
