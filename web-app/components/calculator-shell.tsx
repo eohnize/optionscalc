@@ -73,6 +73,56 @@ type SetupState = {
   iv: string;
 };
 
+type ContractCandidate = {
+  expiry: string;
+  dte: number;
+  strike: number;
+  otm_pct: number;
+  iv_pct?: number | null;
+  iv_source?: string | null;
+  chain_iv_pct?: number | null;
+  previous_contract_iv_pct?: number | null;
+  iv_change_pct_pts?: number | null;
+  mark_price?: number | null;
+  mark_source?: string | null;
+  spread_pct?: number | null;
+  previous_contract_close?: number | null;
+  previous_close_source?: string | null;
+  bid?: number | null;
+  ask?: number | null;
+  last?: number | null;
+  contract_change?: number | null;
+  contract_change_pct?: number | null;
+  open_interest?: number | null;
+  volume?: number | null;
+  liquidity_score?: number | null;
+};
+
+type ContractAssistantData = {
+  ticker: string;
+  option_type: string;
+  spot_price: number;
+  previous_spot_close?: number | null;
+  min_dte: number;
+  max_dte: number;
+  max_otm_pct: number;
+  candidates?: ContractCandidate[];
+  best_candidate?: ContractCandidate | null;
+  note?: string | null;
+};
+
+type AssistantState = {
+  data: ContractAssistantData | null;
+  loading: boolean;
+  error: string | null;
+};
+
+type AssistantPrefs = {
+  minDte: string;
+  maxDte: string;
+  maxOtmPct: string;
+};
+
 type ReadLevel = {
   price: number;
   label: string;
@@ -91,6 +141,8 @@ type LevelCluster = {
   anchor: ReadLevel;
   cluster: ReadLevel[];
   band: string;
+  bandPct: number;
+  bandLabel: "Single" | "Tight" | "Moderate" | "Wide";
   score: number;
   wallLed: boolean;
   confluence: boolean;
@@ -114,6 +166,11 @@ function fmtDollar(value: number | null | undefined, digits = 2) {
   return `$${Number(value).toFixed(digits)}`;
 }
 
+function compact(value: number | null | undefined) {
+  if (!Number.isFinite(value)) return "--";
+  return Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(Number(value));
+}
+
 function fmtPctDist(value: number | null | undefined) {
   if (!Number.isFinite(value)) return "--";
   return `${Number(value).toFixed(Number(value) < 1 ? 2 : 1)}%`;
@@ -124,10 +181,10 @@ function ivSourceLabel(source: string | null | undefined) {
   return (
     {
       bs_inversion: "Contract IV",
-      yf_chain: "Chain IV",
-      options_chain: "ATM IV",
+      yf_chain: "Yahoo chain IV",
+      options_chain: "ATM proxy",
       hv30_fallback: "HV30",
-      atm_fallback: "ATM IV",
+      atm_fallback: "ATM proxy",
       prefill: "Prefill IV",
     }[source] ?? "IV"
   );
@@ -136,9 +193,9 @@ function ivSourceLabel(source: string | null | undefined) {
 function wallMetric(wall: Wall) {
   const oi = Number(wall.open_interest) || 0;
   const volume = Number(wall.volume) || 0;
-  if (oi > 0) return `${Intl.NumberFormat("en-US", { notation: "compact" }).format(oi)} OI`;
-  if (volume > 0) return `${Intl.NumberFormat("en-US", { notation: "compact" }).format(volume)} vol`;
-  return "activity";
+  if (oi > 0) return `Yahoo OI ${compact(oi)}`;
+  if (volume > 0) return `Yahoo vol ${compact(volume)}`;
+  return "Yahoo activity";
 }
 
 function levelName(level: ReadLevel) {
@@ -147,6 +204,25 @@ function levelName(level: ReadLevel) {
   if (level.source === "prev_high") return `Prev High $${level.price.toFixed(2)}`;
   if (level.source === "prev_low") return `Prev Low $${level.price.toFixed(2)}`;
   return `${level.label} $${level.price.toFixed(2)}`;
+}
+
+function contractKey(candidate: ContractCandidate | null | undefined) {
+  if (!candidate) return "";
+  return `${candidate.expiry}|${candidate.strike.toFixed(2)}`;
+}
+
+function closenessBadge(distancePct: number | null | undefined) {
+  if (!Number.isFinite(distancePct)) return { label: "--", tone: "far" as const };
+  if (Number(distancePct) <= 0.35) return { label: "Close", tone: "close" as const };
+  if (Number(distancePct) <= 1.0) return { label: "Near", tone: "near" as const };
+  return { label: "Stretch", tone: "far" as const };
+}
+
+function bandMeaning(label: LevelCluster["bandLabel"] | null | undefined) {
+  if (label === "Tight") return "Tighter bands usually mean cleaner reactions and easier risk definition.";
+  if (label === "Moderate") return "Moderate bands still matter, but expect a bit more give around the zone.";
+  if (label === "Wide") return "Wider bands usually mean looser structure and more chop before price commits.";
+  return "Single levels can react quickly, but they carry less confluence than stacked bands.";
 }
 
 function overlayLevels(levelsData: LevelsData | null): Omit<ReadLevel, "deltaPct" | "distancePct" | "side" | "score">[] {
@@ -244,8 +320,8 @@ function classifyLevelForRead(
   };
 }
 
-function pickLevelCluster(levels: ReadLevel[]): LevelCluster | null {
-  if (!levels.length) return null;
+function pickLevelCluster(levels: ReadLevel[], spot: number): LevelCluster | null {
+  if (!levels.length || !Number.isFinite(spot) || spot <= 0) return null;
 
   const sorted = [...levels].sort((a, b) => a.distancePct - b.distancePct || b.score - a.score);
   const anchor = sorted[0];
@@ -261,16 +337,20 @@ function pickLevelCluster(levels: ReadLevel[]): LevelCluster | null {
   const kindCount = new Set(cluster.map((level) => level.kind)).size;
   const wallLed = cluster.some((level) => level.kind === "call" || level.kind === "put");
   const prices = cluster.map((level) => level.price).sort((a, b) => a - b);
+  const range = prices.length > 1 ? Math.abs(prices[prices.length - 1] - prices[0]) : 0;
+  const bandPct = range > 0 ? (range / spot) * 100 : 0;
   const band =
-    prices.length > 1 && Math.abs(prices[prices.length - 1] - prices[0]) > 0.11
-      ? `$${prices[0].toFixed(2)}-$${prices[prices.length - 1].toFixed(2)}`
-      : `$${anchor.price.toFixed(2)}`;
+    range > 0.11 ? `$${prices[0].toFixed(2)}-$${prices[prices.length - 1].toFixed(2)}` : `$${anchor.price.toFixed(2)}`;
   const score = cluster.reduce((sum, level, idx) => sum + level.score - idx * 4, 0);
+  const bandLabel: LevelCluster["bandLabel"] =
+    cluster.length <= 1 ? "Single" : bandPct <= 0.4 ? "Tight" : bandPct <= 1.1 ? "Moderate" : "Wide";
 
   return {
     anchor,
     cluster,
     band,
+    bandPct,
+    bandLabel,
     score,
     wallLed,
     confluence: kindCount > 1 || cluster.length > 1,
@@ -285,20 +365,16 @@ function clusterNote(cluster: LevelCluster | null, side: "support" | "resistance
       : "No nearby resistance cluster is mapped yet.";
   }
   const lead = cluster.wallLed ? "wall-led" : "trend-led";
-  const dist =
-    cluster.distancePct < 0.12
-      ? "right on spot"
-      : `${fmtPctDist(cluster.distancePct)} ${side === "support" ? "below" : "above"} spot`;
-  const confluence = cluster.confluence ? "Confluence" : "Single level";
-  return `${confluence} around ${cluster.band} | ${lead} | ${dist}`;
+  const dist = closenessBadge(cluster.distancePct).label;
+  return `${cluster.bandLabel} band around ${cluster.band} | ${lead} | ${dist}`;
 }
 
 function marketReadSummary(levelsData: LevelsData | null, spot: number): MarketRead | null {
   if (!levelsData || !Number.isFinite(spot) || spot <= 0) return null;
 
   const levels = overlayLevels(levelsData).map((level) => classifyLevelForRead(level, spot));
-  const support = pickLevelCluster(levels.filter((level) => level.side === "support"));
-  const resistance = pickLevelCluster(levels.filter((level) => level.side === "resistance"));
+  const support = pickLevelCluster(levels.filter((level) => level.side === "support"), spot);
+  const resistance = pickLevelCluster(levels.filter((level) => level.side === "resistance"), spot);
   const pivots = levels
     .filter((level) => level.side === "pivot")
     .sort((a, b) => a.distancePct - b.distancePct || b.score - a.score);
@@ -306,14 +382,14 @@ function marketReadSummary(levelsData: LevelsData | null, spot: number): MarketR
   let tone = "Balanced map";
   let toneClass: MarketRead["toneClass"] = "neutral";
   let note =
-    "Walls usually matter most for the first reaction. EMAs and SMAs matter more when they stack in the same band.";
+    "Walls usually matter first. EMAs and SMAs matter more when they stack into the same reaction band.";
 
   if (support && resistance) {
     const bothTight = Math.max(support.distancePct, resistance.distancePct) <= 1.2;
     const scoreGap = Math.abs(support.score - resistance.score);
     if (bothTight && Math.abs(support.distancePct - resistance.distancePct) <= 0.4 && scoreGap <= 10) {
       tone = "Compression zone";
-      note = "Support and resistance are both nearby, so price may chop between them until one side breaks with conviction.";
+      note = "Support and resistance are both nearby, so price may churn between them until one side wins decisively.";
     } else if (
       (support.distancePct <= 0.9 && support.score >= resistance.score - 4) ||
       support.score >= resistance.score + 10
@@ -321,8 +397,8 @@ function marketReadSummary(levelsData: LevelsData | null, spot: number): MarketR
       tone = "Support-led";
       toneClass = "bull";
       note = support.confluence
-        ? "Put wall and trend support are stacked close together. Pullbacks into that band are the cleaner risk-defined buy zone."
-        : "Nearest support is doing more work than overhead resistance right now. Dips into that level are the better spot to lean on.";
+        ? "Put wall and trend support are stacked together. Pullbacks into that band are the cleaner risk-defined buy zone."
+        : "Nearest support is doing more work than overhead resistance right now, so dips into it deserve more attention.";
     } else if (
       (resistance.distancePct <= 0.9 && resistance.score >= support.score - 4) ||
       resistance.score >= support.score + 10
@@ -330,11 +406,11 @@ function marketReadSummary(levelsData: LevelsData | null, spot: number): MarketR
       tone = "Resistance-led";
       toneClass = "bear";
       note = resistance.confluence
-        ? "Call wall and trend resistance are clustered overhead. For longs, respect that supply band first."
+        ? "Call wall and trend resistance are clustered overhead. Respect that supply band before pressing fresh longs."
         : "Overhead supply is closer than support, so the first reaction is more likely to stall there.";
     } else {
       tone = "Two-sided";
-      note = "Neither side has a clean edge yet. Let the closer wall or MA cluster win before leaning too hard.";
+      note = "Neither side has a clean edge yet. Let the closer wall or MA cluster show who is in control first.";
     }
   } else if (support) {
     tone = "Support in focus";
@@ -353,24 +429,34 @@ function marketReadSummary(levelsData: LevelsData | null, spot: number): MarketR
   return { tone, toneClass, note, support, resistance };
 }
 
-function nearestWall(walls: Wall[] | undefined, spot: number) {
-  if (!walls?.length || !Number.isFinite(spot)) return -1;
-  return walls.reduce((best, wall, idx, arr) => {
-    return Math.abs(wall.strike - spot) < Math.abs(arr[best].strike - spot) ? idx : best;
-  }, 0);
+function buildLevelRows(levelsData: LevelsData | null, spot: number) {
+  return overlayLevels(levelsData)
+    .map((level) => classifyLevelForRead(level, spot))
+    .filter((level) => level.distancePct <= 8 || level.side !== "pivot")
+    .sort((a, b) => b.price - a.price)
+    .slice(0, 10);
+}
+
+function sameSetup(a: SetupState, b: SetupState) {
+  return a.spot === b.spot && a.strike === b.strike && a.dte === b.dte && a.iv === b.iv;
 }
 
 export function CalculatorShell() {
   const [tickerInput, setTickerInput] = useState("NVDA");
   const [activeTicker, setActiveTicker] = useState("NVDA");
   const [launchKey, setLaunchKey] = useState(0);
+  const [selectedContractKey, setSelectedContractKey] = useState("");
+  const [assistantPrefs, setAssistantPrefs] = useState<AssistantPrefs>({
+    minDte: "180",
+    maxDte: "270",
+    maxOtmPct: "10",
+  });
   const [setup, setSetup] = useState<SetupState>({
     spot: "",
     strike: "",
     dte: "180",
     iv: "",
   });
-  const [setupDirty, setSetupDirty] = useState(false);
   const [health, setHealth] = useState<HealthState>({
     status: "checking",
     text: "Checking calculator engine...",
@@ -382,10 +468,13 @@ export function CalculatorShell() {
     loading: true,
     error: null,
   });
+  const [assistant, setAssistant] = useState<AssistantState>({
+    data: null,
+    loading: true,
+    error: null,
+  });
 
-  const calculatorBaseUrl = useMemo(() => {
-    return trimTrailingSlash(process.env.NEXT_PUBLIC_CALCULATOR_URL ?? FALLBACK_URL);
-  }, []);
+  const calculatorBaseUrl = useMemo(() => trimTrailingSlash(process.env.NEXT_PUBLIC_CALCULATOR_URL ?? FALLBACK_URL), []);
 
   const iframeSrc = useMemo(() => {
     const params = new URLSearchParams();
@@ -479,72 +568,116 @@ export function CalculatorShell() {
   }, [activeTicker, calculatorBaseUrl, launchKey]);
 
   useEffect(() => {
-    if (!snapshot.quote || setupDirty) return;
+    let cancelled = false;
+    const controller = new AbortController();
 
-    const nextSpot = snapshot.quote.price.toFixed(2);
-    const nextStrike = Math.round(snapshot.quote.price).toFixed(2);
-    const nextIv =
-      snapshot.quote.iv_pct != null && Number.isFinite(snapshot.quote.iv_pct)
-        ? snapshot.quote.iv_pct.toFixed(1)
-        : "30.0";
+    async function loadAssistant() {
+      setAssistant({ data: null, loading: true, error: null });
+      try {
+        const params = new URLSearchParams({
+          min_dte: assistantPrefs.minDte || "180",
+          max_dte: assistantPrefs.maxDte || "270",
+          max_otm_pct: assistantPrefs.maxOtmPct || "10",
+          option_type: "call",
+          max_results: "3",
+        });
 
-    setSetup((current) => ({
-      spot: nextSpot,
-      strike: nextStrike,
-      dte: current.dte || "180",
-      iv: nextIv,
-    }));
-  }, [setupDirty, snapshot.quote]);
+        const response = await fetch(`${calculatorBaseUrl}/contract_assistant/${activeTicker}?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Contract assistant failed (${response.status})`);
+        const payload = (await response.json()) as ContractAssistantData & { error?: string };
+        if (payload.error) throw new Error(payload.error);
 
-  const spot = snapshot.quote?.price ?? snapshot.levels?.price ?? 0;
+        if (!cancelled) {
+          setAssistant({
+            data: payload,
+            loading: false,
+            error: null,
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAssistant({
+            data: null,
+            loading: false,
+            error: error instanceof Error ? error.message : "Contract assistant failed.",
+          });
+        }
+      }
+    }
+
+    void loadAssistant();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [activeTicker, assistantPrefs.maxDte, assistantPrefs.maxOtmPct, assistantPrefs.minDte, calculatorBaseUrl, launchKey]);
+
+  useEffect(() => {
+    const spotText = snapshot.quote?.price != null ? snapshot.quote.price.toFixed(2) : setup.spot;
+    const candidates = assistant.data?.candidates ?? [];
+    const best = assistant.data?.best_candidate ?? candidates[0] ?? null;
+    const selected = candidates.find((candidate) => contractKey(candidate) === selectedContractKey) ?? best;
+
+    if (!selected) {
+      if (spotText && spotText !== setup.spot) {
+        setSetup((current) => ({ ...current, spot: spotText }));
+      }
+      return;
+    }
+
+    const nextSetup: SetupState = {
+      spot: spotText,
+      strike: selected.strike.toFixed(2),
+      dte: String(selected.dte),
+      iv: Number.isFinite(Number(selected.iv_pct)) ? Number(selected.iv_pct).toFixed(1) : setup.iv,
+    };
+
+    if (contractKey(selected) !== selectedContractKey) {
+      setSelectedContractKey(contractKey(selected));
+    }
+
+    if (!sameSetup(setup, nextSetup)) {
+      setSetup(nextSetup);
+    }
+  }, [assistant.data, selectedContractKey, setup, snapshot.quote?.price]);
+
+  const spot = snapshot.quote?.price ?? snapshot.levels?.price ?? (Number(setup.spot) || 0);
   const read = useMemo(() => marketReadSummary(snapshot.levels, spot), [snapshot.levels, spot]);
-  const nearestCallIdx = useMemo(() => nearestWall(snapshot.levels?.call_walls, spot), [snapshot.levels?.call_walls, spot]);
-  const nearestPutIdx = useMemo(() => nearestWall(snapshot.levels?.put_walls, spot), [snapshot.levels?.put_walls, spot]);
+  const levelRows = useMemo(() => buildLevelRows(snapshot.levels, spot), [snapshot.levels, spot]);
 
-  const movingAverageEntries = useMemo(() => {
-    const ma = snapshot.levels?.moving_averages ?? {};
-    return MA_ORDER.filter(([key]) => Number.isFinite(ma[key])).map(([key, label]) => ({
-      key,
-      label,
-      price: Number(ma[key]),
-    }));
-  }, [snapshot.levels?.moving_averages]);
+  const currentContract = useMemo(() => {
+    const candidates = assistant.data?.candidates ?? [];
+    return candidates.find((candidate) => contractKey(candidate) === selectedContractKey) ?? assistant.data?.best_candidate ?? null;
+  }, [assistant.data, selectedContractKey]);
 
-  const nearestMaKey = useMemo(() => {
-    if (!movingAverageEntries.length || !Number.isFinite(spot)) return "";
-    return movingAverageEntries.reduce((best, item) => {
-      if (!best) return item.key;
-      const bestPrice = movingAverageEntries.find((entry) => entry.key === best)?.price ?? 0;
-      return Math.abs(item.price - spot) < Math.abs(bestPrice - spot) ? item.key : best;
-    }, "");
-  }, [movingAverageEntries, spot]);
+  function updateAssistantPrefs<K extends keyof AssistantPrefs>(key: K, value: AssistantPrefs[K]) {
+    setSelectedContractKey("");
+    setAssistantPrefs((current) => ({ ...current, [key]: value }));
+  }
 
-  const primarySupport = read?.support ?? null;
-  const primaryResistance = read?.resistance ?? null;
-  const topSupport = (snapshot.levels?.put_walls ?? []).slice(0, 2);
-  const topResistance = (snapshot.levels?.call_walls ?? []).slice(0, 2);
-  const topTrend = movingAverageEntries.slice(0, 3);
-
-  function updateSetup<K extends keyof SetupState>(key: K, value: SetupState[K]) {
-    setSetupDirty(true);
-    setSetup((current) => ({ ...current, [key]: value }));
+  function applyCandidate(candidate: ContractCandidate) {
+    setSelectedContractKey(contractKey(candidate));
+    setSetup({
+      spot: snapshot.quote?.price != null ? snapshot.quote.price.toFixed(2) : setup.spot,
+      strike: candidate.strike.toFixed(2),
+      dte: String(candidate.dte),
+      iv: Number.isFinite(Number(candidate.iv_pct)) ? Number(candidate.iv_pct).toFixed(1) : setup.iv,
+    });
   }
 
   function refreshTicker() {
     const nextTicker = tickerInput.trim().toUpperCase() || "NVDA";
-    if (nextTicker !== activeTicker) {
-      setSetupDirty(false);
-      setSetup((current) => ({
-        spot: "",
-        strike: "",
-        dte: current.dte || "180",
-        iv: "",
-      }));
-    }
     setActiveTicker(nextTicker);
     setTickerInput(nextTicker);
+    setSelectedContractKey("");
     setLaunchKey((value) => value + 1);
   }
+
+  const primarySupport = read?.support ?? null;
+  const primaryResistance = read?.resistance ?? null;
 
   return (
     <section className="shell-card trading-shell">
@@ -580,10 +713,22 @@ export function CalculatorShell() {
 
       <div className="insight-strip">
         <article className="insight-card">
-          <span className="level-kicker">Spot</span>
+          <span className="level-kicker">Spot + IV</span>
           <strong>{fmtDollar(spot)}</strong>
           <p>
-            {snapshot.quote?.iv_pct != null ? `${snapshot.quote.iv_pct.toFixed(1)}% ${ivSourceLabel(snapshot.quote.iv_source)}` : "IV --"} |{" "}
+            {currentContract?.iv_pct != null
+              ? `${Number(currentContract.iv_pct).toFixed(1)}% Contract IV`
+              : snapshot.quote?.iv_pct != null
+                ? `${snapshot.quote.iv_pct.toFixed(1)}% ${ivSourceLabel(snapshot.quote.iv_source)}`
+                : "IV --"}
+            {" | "}
+            {currentContract?.previous_contract_iv_pct != null
+              ? `Yday ${Number(currentContract.previous_contract_iv_pct).toFixed(1)}%`
+              : "Yday IV --"}
+          </p>
+          <p>
+            {snapshot.quote?.iv_pct != null ? `ATM proxy ${snapshot.quote.iv_pct.toFixed(1)}%` : "ATM proxy --"}
+            {" | "}
             {snapshot.quote?.hv30 != null ? `${snapshot.quote.hv30.toFixed(1)}% HV30` : "HV30 --"}
           </p>
         </article>
@@ -623,110 +768,219 @@ export function CalculatorShell() {
 
       <div className="shell-grid">
         <div className="launch-grid">
-          <div className="stack-card compact-card">
-            <h3>Setup</h3>
-            <div className="mini-field-grid">
-              <div className="field-row">
-                <label htmlFor="setup-spot">Spot ($)</label>
-                <input
-                  id="setup-spot"
-                  inputMode="decimal"
-                  value={setup.spot}
-                  onChange={(event) => updateSetup("spot", event.target.value)}
-                  placeholder="182.08"
-                />
+          <div className="stack-card compact-card scout-card">
+            <div className="card-head-inline">
+              <div>
+                <h3>Contract Assistant</h3>
+                <p className="support-note">Lowest-IV call candidate inside your 180-270 DTE swing window.</p>
               </div>
-              <div className="field-row">
-                <label htmlFor="setup-strike">Strike ($)</label>
+            </div>
+
+            <div className="assistant-filter-grid">
+              <div className="field-row compact-input">
+                <label htmlFor="assistant-min-dte">Min DTE</label>
                 <input
-                  id="setup-strike"
-                  inputMode="decimal"
-                  value={setup.strike}
-                  onChange={(event) => updateSetup("strike", event.target.value)}
-                  placeholder="182.00"
-                />
-              </div>
-              <div className="field-row">
-                <label htmlFor="setup-dte">Days to expiry</label>
-                <input
-                  id="setup-dte"
+                  id="assistant-min-dte"
                   inputMode="numeric"
-                  value={setup.dte}
-                  onChange={(event) => updateSetup("dte", event.target.value)}
-                  placeholder="180"
+                  value={assistantPrefs.minDte}
+                  onChange={(event) => updateAssistantPrefs("minDte", event.target.value)}
                 />
               </div>
-              <div className="field-row">
-                <label htmlFor="setup-iv">Implied vol (%)</label>
+              <div className="field-row compact-input">
+                <label htmlFor="assistant-max-dte">Max DTE</label>
                 <input
-                  id="setup-iv"
+                  id="assistant-max-dte"
+                  inputMode="numeric"
+                  value={assistantPrefs.maxDte}
+                  onChange={(event) => updateAssistantPrefs("maxDte", event.target.value)}
+                />
+              </div>
+              <div className="field-row compact-input">
+                <label htmlFor="assistant-max-otm">Max OTM %</label>
+                <input
+                  id="assistant-max-otm"
                   inputMode="decimal"
-                  value={setup.iv}
-                  onChange={(event) => updateSetup("iv", event.target.value)}
-                  placeholder="40.2"
+                  value={assistantPrefs.maxOtmPct}
+                  onChange={(event) => updateAssistantPrefs("maxOtmPct", event.target.value)}
                 />
               </div>
             </div>
-            <p className="support-note">
-              Live quote data seeds these first. Tweak them here, then use the full surface for the
-              heatmap and chain.
-            </p>
+
+            {assistant.error ? <div className="native-error">{assistant.error}</div> : null}
+
+            {assistant.loading ? (
+              <p className="support-note">Scanning long-call contracts for cleaner IV inside your chosen swing window...</p>
+            ) : currentContract ? (
+              <>
+                <div className="assistant-highlight">
+                  <div>
+                    <span className="level-kicker">Best fit</span>
+                    <strong>
+                      ${currentContract.strike.toFixed(2)} call | {currentContract.expiry}
+                    </strong>
+                    <p>
+                      {currentContract.dte}d | {currentContract.otm_pct.toFixed(1)}% OTM |{" "}
+                      {fmtDollar(currentContract.mark_price ?? currentContract.last)} {currentContract.mark_source ?? "last"}
+                    </p>
+                  </div>
+                  <button className="secondary-btn" onClick={() => applyCandidate(currentContract)}>
+                    Use
+                  </button>
+                </div>
+
+                <div className="assistant-stat-grid">
+                  <article className="mini-stat">
+                    <span className="level-kicker">Contract IV</span>
+                    <strong>
+                      {currentContract.iv_pct != null ? `${Number(currentContract.iv_pct).toFixed(1)}%` : "--"}
+                    </strong>
+                    <p>{ivSourceLabel(currentContract.iv_source)}</p>
+                  </article>
+                  <article className="mini-stat">
+                    <span className="level-kicker">Yesterday</span>
+                    <strong>
+                      {currentContract.previous_contract_iv_pct != null
+                        ? `${Number(currentContract.previous_contract_iv_pct).toFixed(1)}%`
+                        : "--"}
+                    </strong>
+                    <p>
+                      {currentContract.previous_contract_close != null
+                        ? `close ${fmtDollar(currentContract.previous_contract_close)}`
+                        : "prior close unavailable"}
+                    </p>
+                  </article>
+                  <article className="mini-stat">
+                    <span className="level-kicker">Yahoo chain</span>
+                    <strong>
+                      {currentContract.chain_iv_pct != null ? `${Number(currentContract.chain_iv_pct).toFixed(1)}%` : "--"}
+                    </strong>
+                    <p>
+                      {currentContract.spread_pct != null
+                        ? `${currentContract.spread_pct.toFixed(1)}% spread`
+                        : "spread unavailable"}
+                    </p>
+                  </article>
+                  <article className="mini-stat">
+                    <span className="level-kicker">Liquidity</span>
+                    <strong>
+                      {(Number(currentContract.open_interest) || 0) > 0
+                        ? `OI ${compact(currentContract.open_interest)}`
+                        : `Vol ${compact(currentContract.volume)}`}
+                    </strong>
+                    <p>{assistant.data?.note ?? "Liquidity helps break ties, but IV still ranks first."}</p>
+                  </article>
+                </div>
+
+                <div className="candidate-list">
+                  {(assistant.data?.candidates ?? []).map((candidate) => {
+                    const selected = contractKey(candidate) === contractKey(currentContract);
+                    return (
+                      <button
+                        type="button"
+                        className={`candidate-row ${selected ? "selected" : ""}`}
+                        key={contractKey(candidate)}
+                        onClick={() => applyCandidate(candidate)}
+                      >
+                        <div className="candidate-main">
+                          <strong>
+                            ${candidate.strike.toFixed(2)} | {candidate.expiry}
+                          </strong>
+                          <span>
+                            {candidate.dte}d | {candidate.otm_pct.toFixed(1)}% OTM |{" "}
+                            {candidate.iv_pct != null ? `${Number(candidate.iv_pct).toFixed(1)}% IV` : "IV --"}
+                          </span>
+                        </div>
+                        <div className="candidate-side">
+                          <span>{fmtDollar(candidate.mark_price ?? candidate.last)}</span>
+                          <span>
+                            {candidate.previous_contract_iv_pct != null
+                              ? `Yday ${candidate.previous_contract_iv_pct.toFixed(1)}%`
+                              : "Yday --"}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p className="support-note">
+                  Contract IV uses Black-Scholes inversion on the live mark when possible. The yesterday comparison uses the
+                  prior contract close inferred from Yahoo&apos;s daily option change.
+                </p>
+              </>
+            ) : (
+              <p className="support-note">
+                No call candidates were found inside this DTE / OTM window. Tighten or widen the scout filters and fetch again.
+              </p>
+            )}
           </div>
 
-          <div className="status-card compact-card">
-            <h3>Level Stack</h3>
-
-            <div className="level-section">
-              <span className="level-kicker">Resistance</span>
-              <div className="pill-row compact">
-                {topResistance.length ? (
-                  topResistance.map((wall, idx) => (
-                    <span className={`lvl-pill call ${idx === nearestCallIdx ? "focus" : ""}`} key={`res-${wall.strike}`}>
-                      {`C ${wall.strike.toFixed(2)} | ${wallMetric(wall)}`}
-                    </span>
-                  ))
-                ) : (
-                  <span className="lvl-pill ref">No call wall</span>
-                )}
+          <div className="status-card compact-card structure-card">
+            <div className="card-head-inline">
+              <div>
+                <h3>Structure Map</h3>
+                <p className="support-note">
+                  Tighter bands usually mean cleaner reactions. Wider bands usually mean looser structure and more chop.
+                </p>
               </div>
             </div>
 
-            <div className="level-section">
-              <span className="level-kicker">Support</span>
-              <div className="pill-row compact">
-                {topSupport.length ? (
-                  topSupport.map((wall, idx) => (
-                    <span className={`lvl-pill put ${idx === nearestPutIdx ? "focus" : ""}`} key={`sup-${wall.strike}`}>
-                      {`P ${wall.strike.toFixed(2)} | ${wallMetric(wall)}`}
-                    </span>
-                  ))
-                ) : (
-                  <span className="lvl-pill ref">No put wall</span>
-                )}
+            <div className="band-chip-row">
+              <div className={`band-chip ${primarySupport ? primarySupport.bandLabel.toLowerCase() : "single"}`}>
+                <span className="level-kicker">Support band</span>
+                <strong>{primarySupport ? `${primarySupport.bandLabel} | ${closenessBadge(primarySupport.distancePct).label}` : "--"}</strong>
+                <p>{primarySupport ? bandMeaning(primarySupport.bandLabel) : "No nearby support band yet."}</p>
+              </div>
+              <div className={`band-chip ${primaryResistance ? primaryResistance.bandLabel.toLowerCase() : "single"}`}>
+                <span className="level-kicker">Resistance band</span>
+                <strong>
+                  {primaryResistance ? `${primaryResistance.bandLabel} | ${closenessBadge(primaryResistance.distancePct).label}` : "--"}
+                </strong>
+                <p>{primaryResistance ? bandMeaning(primaryResistance.bandLabel) : "No nearby resistance band yet."}</p>
               </div>
             </div>
 
-            <div className="level-section">
-              <span className="level-kicker">Trend</span>
-              <div className="pill-row compact">
-                {topTrend.length ? (
-                  topTrend.map((entry) => (
-                    <span className={`lvl-pill ma ${entry.key === nearestMaKey ? "focus" : ""}`} key={entry.key}>
-                      {`${entry.label} $${entry.price.toFixed(2)}`}
-                    </span>
-                  ))
-                ) : (
-                  <span className="lvl-pill ref">No trend markers</span>
-                )}
-              </div>
+            <div className="structure-ladder">
+              {levelRows.length ? (
+                levelRows.map((level) => {
+                  const badge = closenessBadge(level.distancePct);
+                  return (
+                    <div className={`structure-row ${level.kind}`} key={`${level.source}-${level.price}`}>
+                      <div className="structure-rail">
+                        <span className="structure-dot" />
+                      </div>
+                      <div className="structure-body">
+                        <div className="structure-main">
+                          <span className={`lvl-pill ${level.kind === "call" ? "call" : level.kind === "put" ? "put" : "ma"}`}>
+                            {level.kind === "call" ? "Call wall" : level.kind === "put" ? "Put wall" : level.label}
+                          </span>
+                          <strong>{fmtDollar(level.price)}</strong>
+                          <span className={`distance-badge ${badge.tone}`}>{badge.label}</span>
+                        </div>
+                        <div className="structure-sub">
+                          <span>{fmtPctDist(level.distancePct)} from spot</span>
+                          {(level.kind === "call" || level.kind === "put") && (Number(level.open_interest) > 0 || Number(level.volume) > 0) ? (
+                            <span>{wallMetric({ open_interest: level.open_interest, volume: level.volume, strike: level.price })}</span>
+                          ) : (
+                            <span>{level.side === "support" ? "Support marker" : level.side === "resistance" ? "Resistance marker" : "Pivot marker"}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="support-note">No nearby walls or moving averages are mapped yet for this ticker.</p>
+              )}
             </div>
 
-            <div className="pill-row compact">
-              {snapshot.levels?.reference_expiry ? <span className="lvl-pill ref">{snapshot.levels.reference_expiry}</span> : null}
-              {snapshot.levels?.reference_dte != null ? <span className="lvl-pill ref">{snapshot.levels.reference_dte}d</span> : null}
-              {snapshot.levels?.source_expiries?.length ? (
-                <span className="lvl-pill ref">{snapshot.levels.source_expiries.length} exps</span>
-              ) : null}
+            <div className="data-note">
+              <strong>Yahoo OI / vol</strong>
+              <p>
+                This is raw option-chain open interest or same-day volume by strike, aggregated across{" "}
+                {snapshot.levels?.source_expiries?.length ?? 0} nearby expiries. It is not net premium, net OI, or GEX, so it can
+                differ sharply from Cheddar-style flow data.
+              </p>
             </div>
           </div>
         </div>
@@ -736,7 +990,7 @@ export function CalculatorShell() {
             <div>
               <div className="surface-title">Calculator Surface</div>
               <div className="surface-note">
-                Heatmap and chain stay center stage while the shell carries the live read.
+                The browser shell scouts the cleaner contract and structure first. The full calculator still handles heatmap and chain work.
               </div>
             </div>
             <div className="surface-note">{calculatorBaseUrl}</div>
