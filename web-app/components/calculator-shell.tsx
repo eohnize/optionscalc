@@ -114,12 +114,6 @@ function fmtDollar(value: number | null | undefined, digits = 2) {
   return `$${Number(value).toFixed(digits)}`;
 }
 
-function fmtPct(value: number | null | undefined, digits = 1) {
-  if (!Number.isFinite(value)) return "--";
-  const n = Number(value);
-  return `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;
-}
-
 function fmtPctDist(value: number | null | undefined) {
   if (!Number.isFinite(value)) return "--";
   return `${Number(value).toFixed(Number(value) < 1 ? 2 : 1)}%`;
@@ -291,7 +285,10 @@ function clusterNote(cluster: LevelCluster | null, side: "support" | "resistance
       : "No nearby resistance cluster is mapped yet.";
   }
   const lead = cluster.wallLed ? "wall-led" : "trend-led";
-  const dist = cluster.distancePct < 0.12 ? "right on spot" : `${fmtPctDist(cluster.distancePct)} ${side === "support" ? "below" : "above"} spot`;
+  const dist =
+    cluster.distancePct < 0.12
+      ? "right on spot"
+      : `${fmtPctDist(cluster.distancePct)} ${side === "support" ? "below" : "above"} spot`;
   const confluence = cluster.confluence ? "Confluence" : "Single level";
   return `${confluence} around ${cluster.band} | ${lead} | ${dist}`;
 }
@@ -317,7 +314,10 @@ function marketReadSummary(levelsData: LevelsData | null, spot: number): MarketR
     if (bothTight && Math.abs(support.distancePct - resistance.distancePct) <= 0.4 && scoreGap <= 10) {
       tone = "Compression zone";
       note = "Support and resistance are both nearby, so price may chop between them until one side breaks with conviction.";
-    } else if ((support.distancePct <= 0.9 && support.score >= resistance.score - 4) || support.score >= resistance.score + 10) {
+    } else if (
+      (support.distancePct <= 0.9 && support.score >= resistance.score - 4) ||
+      support.score >= resistance.score + 10
+    ) {
       tone = "Support-led";
       toneClass = "bull";
       note = support.confluence
@@ -330,7 +330,7 @@ function marketReadSummary(levelsData: LevelsData | null, spot: number): MarketR
       tone = "Resistance-led";
       toneClass = "bear";
       note = resistance.confluence
-        ? "Call wall and trend resistance are clustered overhead. For longs, I would respect that supply band first."
+        ? "Call wall and trend resistance are clustered overhead. For longs, respect that supply band first."
         : "Overhead supply is closer than support, so the first reaction is more likely to stall there.";
     } else {
       tone = "Two-sided";
@@ -390,17 +390,14 @@ export function CalculatorShell() {
   const iframeSrc = useMemo(() => {
     const params = new URLSearchParams();
     params.set("apiBase", calculatorBaseUrl);
-    if (activeTicker.trim()) {
-      params.set("ticker", activeTicker.trim().toUpperCase());
-    }
+    if (activeTicker.trim()) params.set("ticker", activeTicker.trim().toUpperCase());
     if (setup.spot.trim()) params.set("price", setup.spot.trim());
     if (setup.strike.trim()) params.set("strike", setup.strike.trim());
     if (setup.dte.trim()) params.set("dte", setup.dte.trim());
     if (setup.iv.trim()) params.set("iv", setup.iv.trim());
-
     const query = params.toString();
     return `/options_calculator.html${query ? `?${query}` : ""}`;
-  }, [calculatorBaseUrl, activeTicker, setup.dte, setup.iv, setup.spot, setup.strike]);
+  }, [activeTicker, calculatorBaseUrl, setup.dte, setup.iv, setup.spot, setup.strike]);
 
   useEffect(() => {
     let cancelled = false;
@@ -413,7 +410,7 @@ export function CalculatorShell() {
         if (!cancelled) {
           setHealth({
             status: "live",
-            text: payload.version ? `Engine live · v${payload.version}` : "Engine live",
+            text: payload.version ? `Engine live v${payload.version}` : "Engine live",
           });
         }
       } catch {
@@ -438,7 +435,6 @@ export function CalculatorShell() {
 
     async function loadSnapshot() {
       setSnapshot((current) => ({ ...current, loading: true, error: null }));
-
       try {
         const [quoteRes, catalystRes, levelsRes] = await Promise.all([
           fetch(`${calculatorBaseUrl}/quote/${activeTicker}`, { cache: "no-store", signal: controller.signal }),
@@ -451,7 +447,6 @@ export function CalculatorShell() {
         const quote = (await quoteRes.json()) as QuoteData & { error?: string };
         const catalyst = catalystRes.ok ? ((await catalystRes.json()) as CatalystData & { error?: string }) : null;
         const levels = levelsRes.ok ? ((await levelsRes.json()) as LevelsData & { error?: string }) : null;
-
         if (quote.error) throw new Error(quote.error);
 
         if (!cancelled) {
@@ -477,12 +472,11 @@ export function CalculatorShell() {
     }
 
     void loadSnapshot();
-
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [calculatorBaseUrl, activeTicker, launchKey]);
+  }, [activeTicker, calculatorBaseUrl, launchKey]);
 
   useEffect(() => {
     if (!snapshot.quote || setupDirty) return;
@@ -496,16 +490,17 @@ export function CalculatorShell() {
 
     setSetup((current) => ({
       spot: nextSpot,
-      strike: current.strike && current.strike !== current.spot ? current.strike : nextStrike,
+      strike: nextStrike,
       dte: current.dte || "180",
       iv: nextIv,
     }));
-  }, [snapshot.quote, setupDirty]);
+  }, [setupDirty, snapshot.quote]);
 
   const spot = snapshot.quote?.price ?? snapshot.levels?.price ?? 0;
   const read = useMemo(() => marketReadSummary(snapshot.levels, spot), [snapshot.levels, spot]);
   const nearestCallIdx = useMemo(() => nearestWall(snapshot.levels?.call_walls, spot), [snapshot.levels?.call_walls, spot]);
   const nearestPutIdx = useMemo(() => nearestWall(snapshot.levels?.put_walls, spot), [snapshot.levels?.put_walls, spot]);
+
   const movingAverageEntries = useMemo(() => {
     const ma = snapshot.levels?.moving_averages ?? {};
     return MA_ORDER.filter(([key]) => Number.isFinite(ma[key])).map(([key, label]) => ({
@@ -524,22 +519,58 @@ export function CalculatorShell() {
     }, "");
   }, [movingAverageEntries, spot]);
 
+  const primarySupport = read?.support ?? null;
+  const primaryResistance = read?.resistance ?? null;
+  const topSupport = (snapshot.levels?.put_walls ?? []).slice(0, 2);
+  const topResistance = (snapshot.levels?.call_walls ?? []).slice(0, 2);
+  const topTrend = movingAverageEntries.slice(0, 3);
+
   function updateSetup<K extends keyof SetupState>(key: K, value: SetupState[K]) {
     setSetupDirty(true);
     setSetup((current) => ({ ...current, [key]: value }));
   }
 
+  function refreshTicker() {
+    const nextTicker = tickerInput.trim().toUpperCase() || "NVDA";
+    if (nextTicker !== activeTicker) {
+      setSetupDirty(false);
+      setSetup((current) => ({
+        spot: "",
+        strike: "",
+        dte: current.dte || "180",
+        iv: "",
+      }));
+    }
+    setActiveTicker(nextTicker);
+    setTickerInput(nextTicker);
+    setLaunchKey((value) => value + 1);
+  }
+
   return (
-    <section className="shell-card">
-      <div className="shell-top">
-        <div>
-          <span className="eyebrow">App Shell</span>
-          <h2>Launch the live calculator from a cleaner browser surface.</h2>
-          <p>
-            This keeps the current engine working while we migrate the controls, heatmap, and chain
-            into native React screens. It is the fastest path to Vercel and an installable phone
-            experience.
-          </p>
+    <section className="shell-card trading-shell">
+      <div className="trade-toolbar">
+        <div className="trade-toolbar-main">
+          <span className="eyebrow">Trading Mode</span>
+          <div className="trade-control-row">
+            <input
+              className="ticker-input"
+              aria-label="Ticker"
+              value={tickerInput}
+              onChange={(event) => setTickerInput(event.target.value.toUpperCase())}
+              placeholder="NVDA"
+            />
+            <button className="primary-btn" onClick={refreshTicker}>
+              Fetch Live
+            </button>
+            <a className="secondary-btn" href={iframeSrc} target="_blank" rel="noreferrer">
+              Open Full Screen
+            </a>
+          </div>
+          <div className="trade-meta-row">
+            <strong>{snapshot.quote?.company ?? activeTicker}</strong>
+            <span>{snapshot.quote?.sector ?? "Live snapshot"}</span>
+            {snapshot.levels?.reference_expiry ? <span>Walls {snapshot.levels.reference_expiry}</span> : null}
+          </div>
         </div>
         <div className={`status-badge ${health.status}`}>
           <span className="status-dot" />
@@ -547,190 +578,53 @@ export function CalculatorShell() {
         </div>
       </div>
 
-      <div className="native-grid">
-        <article className="status-card native-card">
-          <div className="native-head">
-            <div>
-              <div className="native-title">{snapshot.quote?.company ?? activeTicker}</div>
-              <div className="surface-note">
-                {snapshot.quote?.sector ?? "Live snapshot"} {snapshot.loading ? " · updating..." : ""}
-              </div>
-            </div>
-            <div className="spot-pill">{fmtDollar(spot)}</div>
-          </div>
-          <div className="metric-grid">
-            <div className="metric-box">
-              <span>Contract / ATM IV</span>
-              <strong>{snapshot.quote?.iv_pct != null ? `${snapshot.quote.iv_pct.toFixed(1)}%` : "--"}</strong>
-              <small>{ivSourceLabel(snapshot.quote?.iv_source)}</small>
-            </div>
-            <div className="metric-box">
-              <span>HV30</span>
-              <strong>{snapshot.quote?.hv30 != null ? `${snapshot.quote.hv30.toFixed(1)}%` : "--"}</strong>
-              <small>Realized baseline</small>
-            </div>
-            <div className="metric-box">
-              <span>52w Range</span>
-              <strong>
-                {snapshot.quote?.["52w_low"] != null && snapshot.quote?.["52w_high"] != null
-                  ? `${fmtDollar(snapshot.quote["52w_low"], 0)} - ${fmtDollar(snapshot.quote["52w_high"], 0)}`
-                  : "--"}
-              </strong>
-              <small>Context for retests</small>
-            </div>
-          </div>
-          {snapshot.error ? <div className="native-error">{snapshot.error}</div> : null}
+      <div className="insight-strip">
+        <article className="insight-card">
+          <span className="level-kicker">Spot</span>
+          <strong>{fmtDollar(spot)}</strong>
+          <p>
+            {snapshot.quote?.iv_pct != null ? `${snapshot.quote.iv_pct.toFixed(1)}% ${ivSourceLabel(snapshot.quote.iv_source)}` : "IV --"} |{" "}
+            {snapshot.quote?.hv30 != null ? `${snapshot.quote.hv30.toFixed(1)}% HV30` : "HV30 --"}
+          </p>
         </article>
 
-        <article className="status-card native-card">
-          <div className="native-title">Catalyst setup</div>
-          <div className="catalyst-strip">
-            <div>
-              <strong>
-                {snapshot.catalyst?.earnings_date ? `Earnings ${snapshot.catalyst.earnings_date}` : "No upcoming earnings mapped"}
-              </strong>
-              <div className="surface-note">
-                {snapshot.catalyst?.days_to_earnings != null
-                  ? `${snapshot.catalyst.days_to_earnings} day${snapshot.catalyst.days_to_earnings === 1 ? "" : "s"} away`
-                  : "Catalyst timing unavailable"}
-              </div>
-            </div>
-            <div className="catalyst-pill">
-              {snapshot.catalyst?.implied_move_pct != null ? `±${snapshot.catalyst.implied_move_pct}%` : "--"}
-            </div>
-          </div>
-          <div className="surface-note">
-            {snapshot.catalyst?.straddle_expiry ? `Implied move based on ${snapshot.catalyst.straddle_expiry} straddle pricing.` : "Use this as the quick event-risk gauge before leaning into size."}
-          </div>
+        <article className="insight-card catalyst">
+          <span className="level-kicker">Catalyst</span>
+          <strong>
+            {snapshot.catalyst?.earnings_date ? `Earnings ${snapshot.catalyst.earnings_date}` : "No event mapped"}
+          </strong>
+          <p>
+            {snapshot.catalyst?.implied_move_pct != null
+              ? `+/-${snapshot.catalyst.implied_move_pct}% implied move`
+              : "Catalyst timing unavailable"}
+          </p>
+        </article>
+
+        <article className="insight-card support">
+          <span className="level-kicker">Primary support</span>
+          <strong>{primarySupport?.band ?? "--"}</strong>
+          <p>{clusterNote(primarySupport, "support")}</p>
+        </article>
+
+        <article className="insight-card resistance">
+          <span className="level-kicker">Primary resistance</span>
+          <strong>{primaryResistance?.band ?? "--"}</strong>
+          <p>{clusterNote(primaryResistance, "resistance")}</p>
+        </article>
+
+        <article className={`insight-card bias ${read?.toneClass ?? "neutral"}`}>
+          <span className="level-kicker">Read</span>
+          <strong>{read?.tone ?? "Waiting for levels"}</strong>
+          <p>{read?.note ?? "Fetch a live ticker to rank support and resistance."}</p>
         </article>
       </div>
 
-      <div className="native-grid">
-        <article className="status-card native-card">
-          <div className="native-title">Resistance / support map</div>
-          <div className="level-section">
-            <span className="level-kicker">Resistance</span>
-            <div className="pill-row">
-              {(snapshot.levels?.call_walls ?? []).slice(0, 3).map((wall, idx) => (
-                <span className={`lvl-pill call ${idx === nearestCallIdx ? "focus" : ""}`} key={`call-${wall.strike}`}>
-                  {`C ${wall.strike.toFixed(2)} | ${wallMetric(wall)}`}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="level-section">
-            <span className="level-kicker">Support</span>
-            <div className="pill-row">
-              {(snapshot.levels?.put_walls ?? []).slice(0, 3).map((wall, idx) => (
-                <span className={`lvl-pill put ${idx === nearestPutIdx ? "focus" : ""}`} key={`put-${wall.strike}`}>
-                  {`P ${wall.strike.toFixed(2)} | ${wallMetric(wall)}`}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="level-section">
-            <span className="level-kicker">Trend</span>
-            <div className="pill-row">
-              {movingAverageEntries.map((entry) => (
-                <span className={`lvl-pill ma ${entry.key === nearestMaKey ? "focus" : ""}`} key={entry.key}>
-                  {`${entry.label} $${entry.price.toFixed(2)}`}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="pill-row">
-            {snapshot.levels?.reference_expiry ? <span className="lvl-pill ref">{snapshot.levels.reference_expiry}</span> : null}
-            {snapshot.levels?.reference_dte != null ? <span className="lvl-pill ref">{snapshot.levels.reference_dte}d</span> : null}
-            {snapshot.levels?.source_expiries?.length ? (
-              <span className="lvl-pill ref">{snapshot.levels.source_expiries.length} exps</span>
-            ) : null}
-          </div>
-        </article>
-
-        <article className="status-card native-card">
-          <div className="native-title">Market read</div>
-          {read ? (
-            <div className="read-grid">
-              <div className={`read-box ${read.toneClass}`}>
-                <span className="level-kicker">Bias</span>
-                <strong>{read.tone}</strong>
-                <p>{read.note}</p>
-              </div>
-              <div className="read-box support">
-                <span className="level-kicker">Primary support</span>
-                <div className="pill-row compact">
-                  {read.support?.cluster.map((level, idx) => (
-                    <span className={`lvl-pill ${level.kind === "ma" ? "ma" : "put"} ${idx === 0 ? "focus" : ""}`} key={`support-${level.source}-${level.price}`}>
-                      {levelName(level)}
-                    </span>
-                  )) ?? <span className="lvl-pill ref">No nearby support</span>}
-                </div>
-                <p>{clusterNote(read.support, "support")}</p>
-              </div>
-              <div className="read-box resistance">
-                <span className="level-kicker">Primary resistance</span>
-                <div className="pill-row compact">
-                  {read.resistance?.cluster.map((level, idx) => (
-                    <span className={`lvl-pill ${level.kind === "ma" ? "ma" : "call"} ${idx === 0 ? "focus" : ""}`} key={`resistance-${level.source}-${level.price}`}>
-                      {levelName(level)}
-                    </span>
-                  )) ?? <span className="lvl-pill ref">No nearby resistance</span>}
-                </div>
-                <p>{clusterNote(read.resistance, "resistance")}</p>
-              </div>
-            </div>
-          ) : (
-            <div className="surface-note">Fetch a live ticker to rank support, resistance, and confluence zones.</div>
-          )}
-        </article>
-      </div>
+      {snapshot.error ? <div className="native-error">{snapshot.error}</div> : null}
 
       <div className="shell-grid">
         <div className="launch-grid">
-          <div className="stack-card">
-            <h3>Launch Controls</h3>
-            <div className="field-row">
-              <label htmlFor="ticker">Ticker</label>
-              <input
-                id="ticker"
-                value={tickerInput}
-                onChange={(event) => setTickerInput(event.target.value.toUpperCase())}
-                placeholder="NFLX"
-              />
-            </div>
-            <div className="button-row">
-              <button
-                className="primary-btn"
-                onClick={() => {
-                  const nextTicker = tickerInput.trim().toUpperCase() || "NVDA";
-                  if (nextTicker !== activeTicker) {
-                    setSetupDirty(false);
-                    setSetup((current) => ({
-                      spot: "",
-                      strike: "",
-                      dte: current.dte || "180",
-                      iv: "",
-                    }));
-                  }
-                  setActiveTicker(nextTicker);
-                  setTickerInput(nextTicker);
-                  setLaunchKey((value) => value + 1);
-                }}
-              >
-                Refresh Calculator
-              </button>
-              <a className="secondary-btn" href={iframeSrc} target="_blank" rel="noreferrer">
-                Open Full Screen
-              </a>
-            </div>
-            <p className="support-note">
-              For phone use, the full-screen launch is the friendliest move right now. Once we port
-              the internals into React, this same shell becomes the actual app.
-            </p>
-          </div>
-
-          <div className="stack-card">
-            <h3>Native Setup</h3>
+          <div className="stack-card compact-card">
+            <h3>Setup</h3>
             <div className="mini-field-grid">
               <div className="field-row">
                 <label htmlFor="setup-spot">Spot ($)</label>
@@ -774,46 +668,81 @@ export function CalculatorShell() {
               </div>
             </div>
             <p className="support-note">
-              These values prefill the embedded calculator before you dive into the full surface.
-              Live quote data seeds them first, then you can nudge the setup to match the exact trade you want to work.
+              Live quote data seeds these first. Tweak them here, then use the full surface for the
+              heatmap and chain.
             </p>
           </div>
 
-          <div className="status-card">
-            <h3>Deployment Shape</h3>
-            <ul className="stack-list">
-              <li>Next.js handles the landing page, mobile layout, and future PWA behavior.</li>
-              <li>FastAPI keeps the pricing engine, catalyst logic, IV lookup, and market levels.</li>
-              <li>The Vercel Python entrypoint sits in <code>api/index.py</code> for deployment.</li>
-            </ul>
-          </div>
+          <div className="status-card compact-card">
+            <h3>Level Stack</h3>
 
-          <div className="status-card">
-            <h3>Recommended Rollout</h3>
-            <ul className="stack-list">
-              <li>Keep the iframe as a fallback while the top-of-screen decision tools turn native.</li>
-              <li>Port the parameter sidebar and saved setup presets next.</li>
-              <li>Then replace the heatmap and chain with React-native tables and touch controls.</li>
-            </ul>
+            <div className="level-section">
+              <span className="level-kicker">Resistance</span>
+              <div className="pill-row compact">
+                {topResistance.length ? (
+                  topResistance.map((wall, idx) => (
+                    <span className={`lvl-pill call ${idx === nearestCallIdx ? "focus" : ""}`} key={`res-${wall.strike}`}>
+                      {`C ${wall.strike.toFixed(2)} | ${wallMetric(wall)}`}
+                    </span>
+                  ))
+                ) : (
+                  <span className="lvl-pill ref">No call wall</span>
+                )}
+              </div>
+            </div>
+
+            <div className="level-section">
+              <span className="level-kicker">Support</span>
+              <div className="pill-row compact">
+                {topSupport.length ? (
+                  topSupport.map((wall, idx) => (
+                    <span className={`lvl-pill put ${idx === nearestPutIdx ? "focus" : ""}`} key={`sup-${wall.strike}`}>
+                      {`P ${wall.strike.toFixed(2)} | ${wallMetric(wall)}`}
+                    </span>
+                  ))
+                ) : (
+                  <span className="lvl-pill ref">No put wall</span>
+                )}
+              </div>
+            </div>
+
+            <div className="level-section">
+              <span className="level-kicker">Trend</span>
+              <div className="pill-row compact">
+                {topTrend.length ? (
+                  topTrend.map((entry) => (
+                    <span className={`lvl-pill ma ${entry.key === nearestMaKey ? "focus" : ""}`} key={entry.key}>
+                      {`${entry.label} $${entry.price.toFixed(2)}`}
+                    </span>
+                  ))
+                ) : (
+                  <span className="lvl-pill ref">No trend markers</span>
+                )}
+              </div>
+            </div>
+
+            <div className="pill-row compact">
+              {snapshot.levels?.reference_expiry ? <span className="lvl-pill ref">{snapshot.levels.reference_expiry}</span> : null}
+              {snapshot.levels?.reference_dte != null ? <span className="lvl-pill ref">{snapshot.levels.reference_dte}d</span> : null}
+              {snapshot.levels?.source_expiries?.length ? (
+                <span className="lvl-pill ref">{snapshot.levels.source_expiries.length} exps</span>
+              ) : null}
+            </div>
           </div>
         </div>
 
         <div className="surface-wrap">
           <div className="surface-head">
             <div>
-              <div className="surface-title">Live Engine Preview</div>
+              <div className="surface-title">Calculator Surface</div>
               <div className="surface-note">
-                The current calculator is embedded as a migration bridge, not the final UI.
+                Heatmap and chain stay center stage while the shell carries the live read.
               </div>
             </div>
             <div className="surface-note">{calculatorBaseUrl}</div>
           </div>
           <div className="iframe-wrap">
-            <iframe
-              key={`${iframeSrc}:${launchKey}`}
-              src={iframeSrc}
-              title="SwingEdge Options Calculator"
-            />
+            <iframe key={`${iframeSrc}:${launchKey}`} src={iframeSrc} title="SwingEdge Options Calculator" />
           </div>
         </div>
       </div>
