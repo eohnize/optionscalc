@@ -27,12 +27,13 @@ export function CalculatorShell() {
 
   const iframeSrc = useMemo(() => {
     const params = new URLSearchParams();
+    params.set("apiBase", calculatorBaseUrl);
     if (ticker.trim()) {
       params.set("ticker", ticker.trim().toUpperCase());
     }
 
     const query = params.toString();
-    return `${calculatorBaseUrl}${query ? `?${query}` : ""}`;
+    return `/options_calculator.html${query ? `?${query}` : ""}`;
   }, [calculatorBaseUrl, ticker]);
 
   useEffect(() => {
