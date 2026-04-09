@@ -202,10 +202,17 @@ table.hm tr.level-stack td.rl .hm-level-tags{gap:5px;}
 </style>
 <script>
 window.__seApiBase = (() => {
+  const params = new URLSearchParams(window.location.search);
+  const override = params.get('apiBase');
+  if (override) return override.replace(/\/$/, '');
   const path = window.location.pathname || '/';
   return path === '/api' || path.startsWith('/api/') ? '/api' : '';
 })();
-window.__seApiUrl = path => `${window.location.origin}${window.__seApiBase}${path}`;
+window.__seApiUrl = path => {
+  const base = window.__seApiBase || '';
+  if (/^https?:\/\//i.test(base)) return `${base}${path}`;
+  return `${window.location.origin}${base}${path}`;
+};
 </script>
 </head>
 <body>
