@@ -48,6 +48,22 @@ a {
   gap: 20px;
 }
 
+.trade-intro {
+  padding: 6px 2px 0;
+}
+
+.trade-intro h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 3vw, 2.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+}
+
+.trade-intro p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
 .hero-card,
 .roadmap-card,
 .shell-card {
@@ -124,6 +140,108 @@ a {
   padding: 20px;
   display: grid;
   gap: 18px;
+}
+
+.trading-shell {
+  gap: 16px;
+}
+
+.trade-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.trade-toolbar-main {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.trade-control-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ticker-input {
+  width: min(180px, 100%);
+  min-height: 46px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: rgba(8, 14, 22, 0.95);
+  color: var(--text);
+  padding: 0 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.trade-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.trade-meta-row strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.insight-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.insight-card {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(8, 14, 22, 0.84);
+}
+
+.insight-card strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 1rem;
+}
+
+.insight-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 0.88rem;
+}
+
+.insight-card.catalyst {
+  border-color: rgba(244, 193, 95, 0.18);
+  background: linear-gradient(180deg, rgba(77, 56, 9, 0.38), rgba(14, 18, 22, 0.92));
+}
+
+.insight-card.support {
+  border-color: rgba(103, 209, 143, 0.22);
+}
+
+.insight-card.resistance {
+  border-color: rgba(255, 128, 120, 0.22);
+}
+
+.insight-card.bias.bull {
+  border-color: rgba(103, 209, 143, 0.22);
+  background: linear-gradient(180deg, rgba(17, 45, 27, 0.46), rgba(10, 15, 18, 0.92));
+}
+
+.insight-card.bias.bear {
+  border-color: rgba(255, 128, 120, 0.22);
+  background: linear-gradient(180deg, rgba(59, 20, 19, 0.44), rgba(14, 12, 16, 0.92));
+}
+
+.compact-card {
+  gap: 14px;
 }
 
 .shell-top {
@@ -375,6 +493,7 @@ a {
 .launch-grid {
   display: grid;
   gap: 12px;
+  align-content: start;
 }
 
 .mini-field-grid {
@@ -494,6 +613,7 @@ a {
 }
 
 @media (max-width: 1080px) {
+  .insight-strip,
   .hero-card,
   .native-grid,
   .shell-grid {
@@ -508,7 +628,8 @@ a {
   .shell-top,
   .surface-head,
   .native-head,
-  .catalyst-strip {
+  .catalyst-strip,
+  .trade-toolbar {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -543,5 +664,15 @@ a {
 
   .mini-field-grid {
     grid-template-columns: 1fr;
+  }
+
+  .trade-control-row {
+    width: 100%;
+  }
+
+  .ticker-input,
+  .trade-control-row .primary-btn,
+  .trade-control-row .secondary-btn {
+    width: 100%;
   }
 }
