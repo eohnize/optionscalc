@@ -3,22 +3,384 @@
 import { useEffect, useMemo, useState } from "react";
 
 const FALLBACK_URL = "http://127.0.0.1:8765";
+const MA_ORDER = [
+  ["ema_21", "EMA 21"],
+  ["sma_50", "SMA 50"],
+  ["sma_200", "SMA 200"],
+  ["ema_8", "EMA 8"],
+  ["sma_20", "SMA 20"],
+] as const;
 
 type HealthState =
   | { status: "checking"; text: string }
   | { status: "live"; text: string }
   | { status: "offline"; text: string };
 
+type QuoteData = {
+  ticker: string;
+  price: number;
+  iv_pct?: number | null;
+  iv_source?: string | null;
+  company?: string | null;
+  sector?: string | null;
+  hv30?: number | null;
+  "52w_high"?: number | null;
+  "52w_low"?: number | null;
+};
+
+type CatalystData = {
+  earnings_date?: string | null;
+  days_to_earnings?: number | null;
+  implied_move_pct?: number | null;
+  straddle_expiry?: string | null;
+};
+
+type Wall = {
+  strike: number;
+  open_interest?: number;
+  volume?: number;
+  pct_from_spot?: number;
+  expiry_count?: number;
+};
+
+type LevelsData = {
+  price: number;
+  reference_expiry?: string | null;
+  reference_dte?: number | null;
+  source_expiries?: string[];
+  call_walls?: Wall[];
+  put_walls?: Wall[];
+  moving_averages?: Record<string, number>;
+  previous_session?: {
+    high?: number | null;
+    low?: number | null;
+    close?: number | null;
+  };
+};
+
+type SnapshotState = {
+  quote: QuoteData | null;
+  catalyst: CatalystData | null;
+  levels: LevelsData | null;
+  loading: boolean;
+  error: string | null;
+};
+
+type SetupState = {
+  spot: string;
+  strike: string;
+  dte: string;
+  iv: string;
+};
+
+type ReadLevel = {
+  price: number;
+  label: string;
+  kind: "call" | "put" | "ma";
+  source: string;
+  priority: number;
+  open_interest?: number;
+  volume?: number;
+  deltaPct: number;
+  distancePct: number;
+  side: "support" | "resistance" | "pivot";
+  score: number;
+};
+
+type LevelCluster = {
+  anchor: ReadLevel;
+  cluster: ReadLevel[];
+  band: string;
+  score: number;
+  wallLed: boolean;
+  confluence: boolean;
+  distancePct: number;
+};
+
+type MarketRead = {
+  tone: string;
+  toneClass: "bull" | "bear" | "neutral";
+  note: string;
+  support: LevelCluster | null;
+  resistance: LevelCluster | null;
+};
+
 function trimTrailingSlash(value: string) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
+function fmtDollar(value: number | null | undefined, digits = 2) {
+  if (!Number.isFinite(value)) return "--";
+  return `$${Number(value).toFixed(digits)}`;
+}
+
+function fmtPct(value: number | null | undefined, digits = 1) {
+  if (!Number.isFinite(value)) return "--";
+  const n = Number(value);
+  return `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;
+}
+
+function fmtPctDist(value: number | null | undefined) {
+  if (!Number.isFinite(value)) return "--";
+  return `${Number(value).toFixed(Number(value) < 1 ? 2 : 1)}%`;
+}
+
+function ivSourceLabel(source: string | null | undefined) {
+  if (!source) return "IV";
+  return (
+    {
+      bs_inversion: "Contract IV",
+      yf_chain: "Chain IV",
+      options_chain: "ATM IV",
+      hv30_fallback: "HV30",
+      atm_fallback: "ATM IV",
+      prefill: "Prefill IV",
+    }[source] ?? "IV"
+  );
+}
+
+function wallMetric(wall: Wall) {
+  const oi = Number(wall.open_interest) || 0;
+  const volume = Number(wall.volume) || 0;
+  if (oi > 0) return `${Intl.NumberFormat("en-US", { notation: "compact" }).format(oi)} OI`;
+  if (volume > 0) return `${Intl.NumberFormat("en-US", { notation: "compact" }).format(volume)} vol`;
+  return "activity";
+}
+
+function levelName(level: ReadLevel) {
+  if (level.kind === "call") return `Call wall $${level.price.toFixed(2)}`;
+  if (level.kind === "put") return `Put wall $${level.price.toFixed(2)}`;
+  if (level.source === "prev_high") return `Prev High $${level.price.toFixed(2)}`;
+  if (level.source === "prev_low") return `Prev Low $${level.price.toFixed(2)}`;
+  return `${level.label} $${level.price.toFixed(2)}`;
+}
+
+function overlayLevels(levelsData: LevelsData | null): Omit<ReadLevel, "deltaPct" | "distancePct" | "side" | "score">[] {
+  if (!levelsData) return [];
+
+  const levels: Omit<ReadLevel, "deltaPct" | "distancePct" | "side" | "score">[] = [];
+  const ma = levelsData.moving_averages ?? {};
+  const prev = levelsData.previous_session ?? {};
+
+  (levelsData.call_walls ?? []).slice(0, 3).forEach((wall, idx) =>
+    levels.push({
+      price: wall.strike,
+      label: `Call wall ${wallMetric(wall)}`,
+      kind: "call",
+      source: "call_wall",
+      priority: 30 - idx,
+      open_interest: wall.open_interest,
+      volume: wall.volume,
+    }),
+  );
+
+  (levelsData.put_walls ?? []).slice(0, 3).forEach((wall, idx) =>
+    levels.push({
+      price: wall.strike,
+      label: `Put wall ${wallMetric(wall)}`,
+      kind: "put",
+      source: "put_wall",
+      priority: 25 - idx,
+      open_interest: wall.open_interest,
+      volume: wall.volume,
+    }),
+  );
+
+  MA_ORDER.forEach(([key, label], idx) => {
+    const price = ma[key];
+    if (Number.isFinite(price)) {
+      levels.push({
+        price,
+        label,
+        kind: "ma",
+        source: key,
+        priority: 20 - idx,
+      });
+    }
+  });
+
+  if (Number.isFinite(prev.high)) {
+    levels.push({ price: Number(prev.high), label: "Prev High", kind: "ma", source: "prev_high", priority: 15 });
+  }
+  if (Number.isFinite(prev.low)) {
+    levels.push({ price: Number(prev.low), label: "Prev Low", kind: "ma", source: "prev_low", priority: 14 });
+  }
+
+  return levels;
+}
+
+function classifyLevelForRead(
+  level: Omit<ReadLevel, "deltaPct" | "distancePct" | "side" | "score">,
+  spot: number,
+): ReadLevel {
+  const deltaPct = ((level.price / spot) - 1) * 100;
+  const distancePct = Math.abs(deltaPct);
+
+  let side: ReadLevel["side"] = "pivot";
+  if (level.kind === "call") side = "resistance";
+  else if (level.kind === "put") side = "support";
+  else if (deltaPct >= 0.25) side = "resistance";
+  else if (deltaPct <= -0.25) side = "support";
+
+  const baseScore =
+    level.kind === "call"
+      ? 98
+      : level.kind === "put"
+        ? 96
+        : {
+            sma_200: 80,
+            sma_50: 75,
+            ema_21: 73,
+            sma_20: 70,
+            ema_8: 67,
+            prev_high: 72,
+            prev_low: 72,
+          }[level.source] ?? 68;
+
+  const flowMetric = Math.max(Number(level.open_interest) || 0, Number(level.volume) || 0, 0);
+  const flowBoost = level.kind === "call" || level.kind === "put" ? Math.min(16, Math.log10(flowMetric + 1) * 6) : 0;
+  const proximityBoost = Math.max(0, 16 - distancePct * 8);
+
+  return {
+    ...level,
+    deltaPct,
+    distancePct,
+    side,
+    score: baseScore + flowBoost + proximityBoost,
+  };
+}
+
+function pickLevelCluster(levels: ReadLevel[]): LevelCluster | null {
+  if (!levels.length) return null;
+
+  const sorted = [...levels].sort((a, b) => a.distancePct - b.distancePct || b.score - a.score);
+  const anchor = sorted[0];
+  const cluster = sorted
+    .filter(
+      (level) =>
+        Math.abs(((level.price / anchor.price) - 1) * 100) <= 0.85 ||
+        Math.abs(level.distancePct - anchor.distancePct) <= 0.45,
+    )
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+
+  const kindCount = new Set(cluster.map((level) => level.kind)).size;
+  const wallLed = cluster.some((level) => level.kind === "call" || level.kind === "put");
+  const prices = cluster.map((level) => level.price).sort((a, b) => a - b);
+  const band =
+    prices.length > 1 && Math.abs(prices[prices.length - 1] - prices[0]) > 0.11
+      ? `$${prices[0].toFixed(2)}-$${prices[prices.length - 1].toFixed(2)}`
+      : `$${anchor.price.toFixed(2)}`;
+  const score = cluster.reduce((sum, level, idx) => sum + level.score - idx * 4, 0);
+
+  return {
+    anchor,
+    cluster,
+    band,
+    score,
+    wallLed,
+    confluence: kindCount > 1 || cluster.length > 1,
+    distancePct: anchor.distancePct,
+  };
+}
+
+function clusterNote(cluster: LevelCluster | null, side: "support" | "resistance") {
+  if (!cluster) {
+    return side === "support"
+      ? "No nearby support cluster is mapped yet."
+      : "No nearby resistance cluster is mapped yet.";
+  }
+  const lead = cluster.wallLed ? "wall-led" : "trend-led";
+  const dist = cluster.distancePct < 0.12 ? "right on spot" : `${fmtPctDist(cluster.distancePct)} ${side === "support" ? "below" : "above"} spot`;
+  const confluence = cluster.confluence ? "Confluence" : "Single level";
+  return `${confluence} around ${cluster.band} | ${lead} | ${dist}`;
+}
+
+function marketReadSummary(levelsData: LevelsData | null, spot: number): MarketRead | null {
+  if (!levelsData || !Number.isFinite(spot) || spot <= 0) return null;
+
+  const levels = overlayLevels(levelsData).map((level) => classifyLevelForRead(level, spot));
+  const support = pickLevelCluster(levels.filter((level) => level.side === "support"));
+  const resistance = pickLevelCluster(levels.filter((level) => level.side === "resistance"));
+  const pivots = levels
+    .filter((level) => level.side === "pivot")
+    .sort((a, b) => a.distancePct - b.distancePct || b.score - a.score);
+
+  let tone = "Balanced map";
+  let toneClass: MarketRead["toneClass"] = "neutral";
+  let note =
+    "Walls usually matter most for the first reaction. EMAs and SMAs matter more when they stack in the same band.";
+
+  if (support && resistance) {
+    const bothTight = Math.max(support.distancePct, resistance.distancePct) <= 1.2;
+    const scoreGap = Math.abs(support.score - resistance.score);
+    if (bothTight && Math.abs(support.distancePct - resistance.distancePct) <= 0.4 && scoreGap <= 10) {
+      tone = "Compression zone";
+      note = "Support and resistance are both nearby, so price may chop between them until one side breaks with conviction.";
+    } else if ((support.distancePct <= 0.9 && support.score >= resistance.score - 4) || support.score >= resistance.score + 10) {
+      tone = "Support-led";
+      toneClass = "bull";
+      note = support.confluence
+        ? "Put wall and trend support are stacked close together. Pullbacks into that band are the cleaner risk-defined buy zone."
+        : "Nearest support is doing more work than overhead resistance right now. Dips into that level are the better spot to lean on.";
+    } else if (
+      (resistance.distancePct <= 0.9 && resistance.score >= support.score - 4) ||
+      resistance.score >= support.score + 10
+    ) {
+      tone = "Resistance-led";
+      toneClass = "bear";
+      note = resistance.confluence
+        ? "Call wall and trend resistance are clustered overhead. For longs, I would respect that supply band first."
+        : "Overhead supply is closer than support, so the first reaction is more likely to stall there.";
+    } else {
+      tone = "Two-sided";
+      note = "Neither side has a clean edge yet. Let the closer wall or MA cluster win before leaning too hard.";
+    }
+  } else if (support) {
+    tone = "Support in focus";
+    toneClass = "bull";
+    note = "No nearby overhead cluster is stronger than the floor underneath price.";
+  } else if (resistance) {
+    tone = "Resistance in focus";
+    toneClass = "bear";
+    note = "Overhead supply is the clearest nearby reference, so chasing into it deserves extra caution.";
+  }
+
+  if (pivots[0] && pivots[0].distancePct <= 0.3) {
+    note += ` Spot is also sitting almost directly on ${levelName(pivots[0])}, so expect quicker whipsaws until it resolves.`;
+  }
+
+  return { tone, toneClass, note, support, resistance };
+}
+
+function nearestWall(walls: Wall[] | undefined, spot: number) {
+  if (!walls?.length || !Number.isFinite(spot)) return -1;
+  return walls.reduce((best, wall, idx, arr) => {
+    return Math.abs(wall.strike - spot) < Math.abs(arr[best].strike - spot) ? idx : best;
+  }, 0);
+}
+
 export function CalculatorShell() {
-  const [ticker, setTicker] = useState("NVDA");
+  const [tickerInput, setTickerInput] = useState("NVDA");
+  const [activeTicker, setActiveTicker] = useState("NVDA");
   const [launchKey, setLaunchKey] = useState(0);
+  const [setup, setSetup] = useState<SetupState>({
+    spot: "",
+    strike: "",
+    dte: "180",
+    iv: "",
+  });
+  const [setupDirty, setSetupDirty] = useState(false);
   const [health, setHealth] = useState<HealthState>({
     status: "checking",
     text: "Checking calculator engine...",
+  });
+  const [snapshot, setSnapshot] = useState<SnapshotState>({
+    quote: null,
+    catalyst: null,
+    levels: null,
+    loading: true,
+    error: null,
   });
 
   const calculatorBaseUrl = useMemo(() => {
@@ -28,13 +390,17 @@ export function CalculatorShell() {
   const iframeSrc = useMemo(() => {
     const params = new URLSearchParams();
     params.set("apiBase", calculatorBaseUrl);
-    if (ticker.trim()) {
-      params.set("ticker", ticker.trim().toUpperCase());
+    if (activeTicker.trim()) {
+      params.set("ticker", activeTicker.trim().toUpperCase());
     }
+    if (setup.spot.trim()) params.set("price", setup.spot.trim());
+    if (setup.strike.trim()) params.set("strike", setup.strike.trim());
+    if (setup.dte.trim()) params.set("dte", setup.dte.trim());
+    if (setup.iv.trim()) params.set("iv", setup.iv.trim());
 
     const query = params.toString();
     return `/options_calculator.html${query ? `?${query}` : ""}`;
-  }, [calculatorBaseUrl, ticker]);
+  }, [calculatorBaseUrl, activeTicker, setup.dte, setup.iv, setup.spot, setup.strike]);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,10 +408,7 @@ export function CalculatorShell() {
     async function checkHealth() {
       try {
         const response = await fetch(`${calculatorBaseUrl}/health`, { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const payload = (await response.json()) as { version?: string };
         if (!cancelled) {
           setHealth({
@@ -64,11 +427,107 @@ export function CalculatorShell() {
     }
 
     void checkHealth();
-
     return () => {
       cancelled = true;
     };
   }, [calculatorBaseUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    async function loadSnapshot() {
+      setSnapshot((current) => ({ ...current, loading: true, error: null }));
+
+      try {
+        const [quoteRes, catalystRes, levelsRes] = await Promise.all([
+          fetch(`${calculatorBaseUrl}/quote/${activeTicker}`, { cache: "no-store", signal: controller.signal }),
+          fetch(`${calculatorBaseUrl}/catalyst/${activeTicker}`, { cache: "no-store", signal: controller.signal }),
+          fetch(`${calculatorBaseUrl}/levels/${activeTicker}`, { cache: "no-store", signal: controller.signal }),
+        ]);
+
+        if (!quoteRes.ok) throw new Error(`Quote request failed (${quoteRes.status})`);
+
+        const quote = (await quoteRes.json()) as QuoteData & { error?: string };
+        const catalyst = catalystRes.ok ? ((await catalystRes.json()) as CatalystData & { error?: string }) : null;
+        const levels = levelsRes.ok ? ((await levelsRes.json()) as LevelsData & { error?: string }) : null;
+
+        if (quote.error) throw new Error(quote.error);
+
+        if (!cancelled) {
+          setSnapshot({
+            quote,
+            catalyst: catalyst && !("error" in catalyst && catalyst.error) ? catalyst : null,
+            levels: levels && !("error" in levels && levels.error) ? levels : null,
+            loading: false,
+            error: null,
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSnapshot({
+            quote: null,
+            catalyst: null,
+            levels: null,
+            loading: false,
+            error: error instanceof Error ? error.message : "Live snapshot failed.",
+          });
+        }
+      }
+    }
+
+    void loadSnapshot();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [calculatorBaseUrl, activeTicker, launchKey]);
+
+  useEffect(() => {
+    if (!snapshot.quote || setupDirty) return;
+
+    const nextSpot = snapshot.quote.price.toFixed(2);
+    const nextStrike = Math.round(snapshot.quote.price).toFixed(2);
+    const nextIv =
+      snapshot.quote.iv_pct != null && Number.isFinite(snapshot.quote.iv_pct)
+        ? snapshot.quote.iv_pct.toFixed(1)
+        : "30.0";
+
+    setSetup((current) => ({
+      spot: nextSpot,
+      strike: current.strike && current.strike !== current.spot ? current.strike : nextStrike,
+      dte: current.dte || "180",
+      iv: nextIv,
+    }));
+  }, [snapshot.quote, setupDirty]);
+
+  const spot = snapshot.quote?.price ?? snapshot.levels?.price ?? 0;
+  const read = useMemo(() => marketReadSummary(snapshot.levels, spot), [snapshot.levels, spot]);
+  const nearestCallIdx = useMemo(() => nearestWall(snapshot.levels?.call_walls, spot), [snapshot.levels?.call_walls, spot]);
+  const nearestPutIdx = useMemo(() => nearestWall(snapshot.levels?.put_walls, spot), [snapshot.levels?.put_walls, spot]);
+  const movingAverageEntries = useMemo(() => {
+    const ma = snapshot.levels?.moving_averages ?? {};
+    return MA_ORDER.filter(([key]) => Number.isFinite(ma[key])).map(([key, label]) => ({
+      key,
+      label,
+      price: Number(ma[key]),
+    }));
+  }, [snapshot.levels?.moving_averages]);
+
+  const nearestMaKey = useMemo(() => {
+    if (!movingAverageEntries.length || !Number.isFinite(spot)) return "";
+    return movingAverageEntries.reduce((best, item) => {
+      if (!best) return item.key;
+      const bestPrice = movingAverageEntries.find((entry) => entry.key === best)?.price ?? 0;
+      return Math.abs(item.price - spot) < Math.abs(bestPrice - spot) ? item.key : best;
+    }, "");
+  }, [movingAverageEntries, spot]);
+
+  function updateSetup<K extends keyof SetupState>(key: K, value: SetupState[K]) {
+    setSetupDirty(true);
+    setSetup((current) => ({ ...current, [key]: value }));
+  }
 
   return (
     <section className="shell-card">
@@ -88,6 +547,144 @@ export function CalculatorShell() {
         </div>
       </div>
 
+      <div className="native-grid">
+        <article className="status-card native-card">
+          <div className="native-head">
+            <div>
+              <div className="native-title">{snapshot.quote?.company ?? activeTicker}</div>
+              <div className="surface-note">
+                {snapshot.quote?.sector ?? "Live snapshot"} {snapshot.loading ? " · updating..." : ""}
+              </div>
+            </div>
+            <div className="spot-pill">{fmtDollar(spot)}</div>
+          </div>
+          <div className="metric-grid">
+            <div className="metric-box">
+              <span>Contract / ATM IV</span>
+              <strong>{snapshot.quote?.iv_pct != null ? `${snapshot.quote.iv_pct.toFixed(1)}%` : "--"}</strong>
+              <small>{ivSourceLabel(snapshot.quote?.iv_source)}</small>
+            </div>
+            <div className="metric-box">
+              <span>HV30</span>
+              <strong>{snapshot.quote?.hv30 != null ? `${snapshot.quote.hv30.toFixed(1)}%` : "--"}</strong>
+              <small>Realized baseline</small>
+            </div>
+            <div className="metric-box">
+              <span>52w Range</span>
+              <strong>
+                {snapshot.quote?.["52w_low"] != null && snapshot.quote?.["52w_high"] != null
+                  ? `${fmtDollar(snapshot.quote["52w_low"], 0)} - ${fmtDollar(snapshot.quote["52w_high"], 0)}`
+                  : "--"}
+              </strong>
+              <small>Context for retests</small>
+            </div>
+          </div>
+          {snapshot.error ? <div className="native-error">{snapshot.error}</div> : null}
+        </article>
+
+        <article className="status-card native-card">
+          <div className="native-title">Catalyst setup</div>
+          <div className="catalyst-strip">
+            <div>
+              <strong>
+                {snapshot.catalyst?.earnings_date ? `Earnings ${snapshot.catalyst.earnings_date}` : "No upcoming earnings mapped"}
+              </strong>
+              <div className="surface-note">
+                {snapshot.catalyst?.days_to_earnings != null
+                  ? `${snapshot.catalyst.days_to_earnings} day${snapshot.catalyst.days_to_earnings === 1 ? "" : "s"} away`
+                  : "Catalyst timing unavailable"}
+              </div>
+            </div>
+            <div className="catalyst-pill">
+              {snapshot.catalyst?.implied_move_pct != null ? `±${snapshot.catalyst.implied_move_pct}%` : "--"}
+            </div>
+          </div>
+          <div className="surface-note">
+            {snapshot.catalyst?.straddle_expiry ? `Implied move based on ${snapshot.catalyst.straddle_expiry} straddle pricing.` : "Use this as the quick event-risk gauge before leaning into size."}
+          </div>
+        </article>
+      </div>
+
+      <div className="native-grid">
+        <article className="status-card native-card">
+          <div className="native-title">Resistance / support map</div>
+          <div className="level-section">
+            <span className="level-kicker">Resistance</span>
+            <div className="pill-row">
+              {(snapshot.levels?.call_walls ?? []).slice(0, 3).map((wall, idx) => (
+                <span className={`lvl-pill call ${idx === nearestCallIdx ? "focus" : ""}`} key={`call-${wall.strike}`}>
+                  {`C ${wall.strike.toFixed(2)} | ${wallMetric(wall)}`}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="level-section">
+            <span className="level-kicker">Support</span>
+            <div className="pill-row">
+              {(snapshot.levels?.put_walls ?? []).slice(0, 3).map((wall, idx) => (
+                <span className={`lvl-pill put ${idx === nearestPutIdx ? "focus" : ""}`} key={`put-${wall.strike}`}>
+                  {`P ${wall.strike.toFixed(2)} | ${wallMetric(wall)}`}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="level-section">
+            <span className="level-kicker">Trend</span>
+            <div className="pill-row">
+              {movingAverageEntries.map((entry) => (
+                <span className={`lvl-pill ma ${entry.key === nearestMaKey ? "focus" : ""}`} key={entry.key}>
+                  {`${entry.label} $${entry.price.toFixed(2)}`}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="pill-row">
+            {snapshot.levels?.reference_expiry ? <span className="lvl-pill ref">{snapshot.levels.reference_expiry}</span> : null}
+            {snapshot.levels?.reference_dte != null ? <span className="lvl-pill ref">{snapshot.levels.reference_dte}d</span> : null}
+            {snapshot.levels?.source_expiries?.length ? (
+              <span className="lvl-pill ref">{snapshot.levels.source_expiries.length} exps</span>
+            ) : null}
+          </div>
+        </article>
+
+        <article className="status-card native-card">
+          <div className="native-title">Market read</div>
+          {read ? (
+            <div className="read-grid">
+              <div className={`read-box ${read.toneClass}`}>
+                <span className="level-kicker">Bias</span>
+                <strong>{read.tone}</strong>
+                <p>{read.note}</p>
+              </div>
+              <div className="read-box support">
+                <span className="level-kicker">Primary support</span>
+                <div className="pill-row compact">
+                  {read.support?.cluster.map((level, idx) => (
+                    <span className={`lvl-pill ${level.kind === "ma" ? "ma" : "put"} ${idx === 0 ? "focus" : ""}`} key={`support-${level.source}-${level.price}`}>
+                      {levelName(level)}
+                    </span>
+                  )) ?? <span className="lvl-pill ref">No nearby support</span>}
+                </div>
+                <p>{clusterNote(read.support, "support")}</p>
+              </div>
+              <div className="read-box resistance">
+                <span className="level-kicker">Primary resistance</span>
+                <div className="pill-row compact">
+                  {read.resistance?.cluster.map((level, idx) => (
+                    <span className={`lvl-pill ${level.kind === "ma" ? "ma" : "call"} ${idx === 0 ? "focus" : ""}`} key={`resistance-${level.source}-${level.price}`}>
+                      {levelName(level)}
+                    </span>
+                  )) ?? <span className="lvl-pill ref">No nearby resistance</span>}
+                </div>
+                <p>{clusterNote(read.resistance, "resistance")}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="surface-note">Fetch a live ticker to rank support, resistance, and confluence zones.</div>
+          )}
+        </article>
+      </div>
+
       <div className="shell-grid">
         <div className="launch-grid">
           <div className="stack-card">
@@ -96,13 +693,30 @@ export function CalculatorShell() {
               <label htmlFor="ticker">Ticker</label>
               <input
                 id="ticker"
-                value={ticker}
-                onChange={(event) => setTicker(event.target.value.toUpperCase())}
+                value={tickerInput}
+                onChange={(event) => setTickerInput(event.target.value.toUpperCase())}
                 placeholder="NFLX"
               />
             </div>
             <div className="button-row">
-              <button className="primary-btn" onClick={() => setLaunchKey((value) => value + 1)}>
+              <button
+                className="primary-btn"
+                onClick={() => {
+                  const nextTicker = tickerInput.trim().toUpperCase() || "NVDA";
+                  if (nextTicker !== activeTicker) {
+                    setSetupDirty(false);
+                    setSetup((current) => ({
+                      spot: "",
+                      strike: "",
+                      dte: current.dte || "180",
+                      iv: "",
+                    }));
+                  }
+                  setActiveTicker(nextTicker);
+                  setTickerInput(nextTicker);
+                  setLaunchKey((value) => value + 1);
+                }}
+              >
                 Refresh Calculator
               </button>
               <a className="secondary-btn" href={iframeSrc} target="_blank" rel="noreferrer">
@@ -112,6 +726,56 @@ export function CalculatorShell() {
             <p className="support-note">
               For phone use, the full-screen launch is the friendliest move right now. Once we port
               the internals into React, this same shell becomes the actual app.
+            </p>
+          </div>
+
+          <div className="stack-card">
+            <h3>Native Setup</h3>
+            <div className="mini-field-grid">
+              <div className="field-row">
+                <label htmlFor="setup-spot">Spot ($)</label>
+                <input
+                  id="setup-spot"
+                  inputMode="decimal"
+                  value={setup.spot}
+                  onChange={(event) => updateSetup("spot", event.target.value)}
+                  placeholder="182.08"
+                />
+              </div>
+              <div className="field-row">
+                <label htmlFor="setup-strike">Strike ($)</label>
+                <input
+                  id="setup-strike"
+                  inputMode="decimal"
+                  value={setup.strike}
+                  onChange={(event) => updateSetup("strike", event.target.value)}
+                  placeholder="182.00"
+                />
+              </div>
+              <div className="field-row">
+                <label htmlFor="setup-dte">Days to expiry</label>
+                <input
+                  id="setup-dte"
+                  inputMode="numeric"
+                  value={setup.dte}
+                  onChange={(event) => updateSetup("dte", event.target.value)}
+                  placeholder="180"
+                />
+              </div>
+              <div className="field-row">
+                <label htmlFor="setup-iv">Implied vol (%)</label>
+                <input
+                  id="setup-iv"
+                  inputMode="decimal"
+                  value={setup.iv}
+                  onChange={(event) => updateSetup("iv", event.target.value)}
+                  placeholder="40.2"
+                />
+              </div>
+            </div>
+            <p className="support-note">
+              These values prefill the embedded calculator before you dive into the full surface.
+              Live quote data seeds them first, then you can nudge the setup to match the exact trade you want to work.
             </p>
           </div>
 
@@ -127,9 +791,9 @@ export function CalculatorShell() {
           <div className="status-card">
             <h3>Recommended Rollout</h3>
             <ul className="stack-list">
-              <li>Ship this shell first so the project is reachable from any browser.</li>
-              <li>Port the parameter sidebar and market read into native React next.</li>
-              <li>Then replace the legacy iframe with a React heatmap and chain view.</li>
+              <li>Keep the iframe as a fallback while the top-of-screen decision tools turn native.</li>
+              <li>Port the parameter sidebar and saved setup presets next.</li>
+              <li>Then replace the heatmap and chain with React-native tables and touch controls.</li>
             </ul>
           </div>
         </div>
