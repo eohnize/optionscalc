@@ -105,6 +105,15 @@ table.hm td:hover .hmtt{display:block;}
 .cat-imv{margin-left:auto;display:flex;align-items:center;gap:6px;}
 .imv-pill{background:rgba(240,165,0,.15);border:1px solid rgba(240,165,0,.4);border-radius:20px;padding:2px 9px;font-family:var(--mono);font-weight:700;color:var(--gold);font-size:12px;}
 .cat-note{font-size:10px;color:var(--text3);}
+.exec-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:linear-gradient(180deg,rgba(22,27,34,.98),rgba(13,17,23,.98));border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;}
+.exec-strip.hidden{display:none;}
+.exec-k{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;font-weight:700;}
+.exec-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:999px;border:1px solid var(--border2);background:rgba(33,38,45,.88);font-family:var(--mono);font-size:10px;line-height:1;}
+.exec-pill strong{font-size:11px;color:var(--text);}
+.exec-pill.emph{border-color:rgba(240,165,0,.45);background:rgba(240,165,0,.1);color:var(--gold);}
+.exec-pill.good strong{color:var(--greentext);}
+.exec-pill.warn strong{color:var(--gold);}
+.exec-pill.soft strong{color:var(--blue);}
 .levels-strip{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;}
 .levels-strip.hidden{display:none;}
 .lvl-block{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;}
@@ -116,6 +125,9 @@ table.hm td:hover .hmtt{display:block;}
 .lvl-pill.ma{background:rgba(88,166,255,.08);border-color:rgba(88,166,255,.35);color:var(--blue);}
 .lvl-pill.ref{background:rgba(210,153,34,.1);border-color:rgba(210,153,34,.35);color:var(--yellow);}
 .lvl-pill.focus{box-shadow:0 0 0 1px rgba(255,255,255,.05),0 0 18px rgba(210,153,34,.12);}
+.lvl-pill.close{box-shadow:0 0 0 1px rgba(255,255,255,.03),0 0 16px rgba(63,185,80,.08);}
+.lvl-pill.near{opacity:.95;}
+.lvl-pill.stretch{opacity:.82;}
 .market-read{display:grid;grid-template-columns:minmax(260px,1.25fr) repeat(2,minmax(220px,1fr));gap:10px;background:linear-gradient(180deg,rgba(22,27,34,.98),rgba(13,17,23,.98));border:1px solid var(--border);border-radius:var(--radius2);padding:10px 12px;}
 .market-read.hidden{display:none;}
 .read-card{background:linear-gradient(180deg,rgba(33,38,45,.88),rgba(13,17,23,.92));border:1px solid var(--border);border-radius:10px;padding:10px 12px;min-height:96px;}
@@ -130,6 +142,14 @@ table.hm td:hover .hmtt{display:block;}
 .read-note{font-size:11px;line-height:1.45;color:var(--text2);}
 .read-pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px;}
 .read-card .lvl-pill{font-size:10px;padding:4px 8px;}
+.read-card.plan{grid-column:1/-1;min-height:auto;border-color:rgba(210,153,34,.28);}
+.trade-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:10px;}
+.trade-stat{background:rgba(13,17,23,.65);border:1px solid var(--border);border-radius:8px;padding:9px 10px;}
+.trade-l{display:block;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.trade-v{display:block;font-family:var(--mono);font-size:15px;font-weight:700;color:var(--text);}
+.trade-v.pos{color:var(--greentext);}
+.trade-v.neg{color:var(--redtext);}
+.trade-s{display:block;font-size:10px;line-height:1.35;color:var(--text2);margin-top:4px;}
 /* option chain */
 table.chain{border-collapse:collapse;width:100%;font-family:var(--mono);}
 table.chain th{padding:3px 6px;font-size:9px;color:var(--text3);border-bottom:1px solid var(--border);text-align:center;}
@@ -199,6 +219,10 @@ table.hm tr.level-stack td.rl .hm-level-tags{gap:5px;}
 .imv-banner.show{display:flex;align-items:center;gap:6px;}
 @media (max-width:1200px){
   .market-read{grid-template-columns:1fr;}
+  .trade-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media (max-width:800px){
+  .trade-grid{grid-template-columns:1fr;}
 }
 </style>
 <script>
@@ -330,6 +354,15 @@ window.__seApiUrl = path => {
         </div>
       </div>
 
+      <div class="exec-strip hidden" id="execStrip">
+        <span class="exec-k">Execution</span>
+        <span class="exec-pill soft" id="execMark">Mark <strong>â€”</strong></span>
+        <span class="exec-pill" id="execSpread">Spread <strong>â€”</strong></span>
+        <span class="exec-pill" id="execLiquidity">Liquidity <strong>â€”</strong></span>
+        <span class="exec-pill emph" id="execFit">Target fit <strong>â€”</strong></span>
+        <span class="exec-pill good" id="execTargets">+10% / +20% <strong>â€”</strong></span>
+      </div>
+
       <div class="levels-strip hidden" id="levelsStrip">
         <div class="lvl-block">
           <span class="lvl-title">Resistance</span>
@@ -344,25 +377,36 @@ window.__seApiUrl = path => {
           <div class="lvl-pills" id="maPills"></div>
         </div>
         <div class="lvl-block">
-          <span class="lvl-title">Ref Exp</span>
+          <span class="lvl-title">Range</span>
           <div class="lvl-pills" id="refExpiryPills"></div>
         </div>
       </div>
-      <div class="market-read hidden" id="marketRead">
-        <div class="read-card bias">
-          <div class="read-k">Market Read</div>
-          <div class="read-v neutral" id="readBiasTitle">Waiting for live levels</div>
-          <div class="read-note" id="readBiasNote">Fetch live data to rank nearby support and resistance.</div>
-        </div>
-        <div class="read-card support">
-          <div class="read-k">Primary Support</div>
-          <div class="read-pills" id="readSupportPills"></div>
-          <div class="read-note" id="readSupportNote"></div>
-        </div>
-        <div class="read-card resistance">
-          <div class="read-k">Primary Resistance</div>
-          <div class="read-pills" id="readResistancePills"></div>
-          <div class="read-note" id="readResistanceNote"></div>
+      <div class="market-read hidden" id="tradePlan">
+        <div class="read-card bias plan">
+          <div class="read-k">Trade Plan</div>
+          <div class="trade-grid">
+            <div class="trade-stat">
+              <span class="trade-l">Entry Zone</span>
+              <span class="trade-v" id="planEntry">â€”</span>
+              <span class="trade-s" id="planEntryNote"></span>
+            </div>
+            <div class="trade-stat">
+              <span class="trade-l">Invalidation</span>
+              <span class="trade-v neg" id="planStop">â€”</span>
+              <span class="trade-s" id="planStopNote"></span>
+            </div>
+            <div class="trade-stat">
+              <span class="trade-l">First Trim</span>
+              <span class="trade-v pos" id="planTrim1">â€”</span>
+              <span class="trade-s" id="planTrim1Note"></span>
+            </div>
+            <div class="trade-stat">
+              <span class="trade-l">Second Trim</span>
+              <span class="trade-v pos" id="planTrim2">â€”</span>
+              <span class="trade-s" id="planTrim2Note"></span>
+            </div>
+          </div>
+          <div class="read-note" id="planContextNote">Fetch live data to anchor trims against nearby levels and ATR.</div>
         </div>
       </div>
 
@@ -1141,6 +1185,62 @@ window.addEventListener('DOMContentLoaded', () => {
     const confluence=cluster.confluence?'Confluence':'Single level';
     return `${confluence} around ${cluster.band} | ${lead} | ${dist}`;
   }
+  function pillDistanceClass(distancePct){
+    if(distancePct<=0.75)return'close';
+    if(distancePct<=2)return'near';
+    return'stretch';
+  }
+  function closenessLabel(distancePct){
+    if(distancePct<=0.75)return'Close';
+    if(distancePct<=2)return'Near';
+    return'Stretch';
+  }
+  function liquidityGrade(meta){
+    const spreadPct=Number(meta?.spread_pct),oi=Number(meta?.open_interest)||0,vol=Number(meta?.volume)||0,depth=Math.max(oi,vol);
+    if(Number.isFinite(spreadPct)&&spreadPct<=5&&depth>=1000)return'A';
+    if(Number.isFinite(spreadPct)&&spreadPct<=10&&depth>=300)return'B';
+    if(Number.isFinite(spreadPct)&&spreadPct<=18&&depth>=100)return'C';
+    if(depth>0)return'D';
+    return'—';
+  }
+  function priceTargetPct(type,movePct){
+    return type==='put'?-Math.abs(movePct):Math.abs(movePct);
+  }
+  function scenarioPremium(spot,K,dte,iv,rate,type){
+    return bs(Math.max(.01,spot),K,Math.max(dte,1)/365,rate,iv,type);
+  }
+  function targetFitLabel(S,K,type){
+    if(type==='call'){
+      if(K<=S)return'ITM now';
+      if(K<=S*1.10)return'ITM by +10%';
+      if(K<=S*1.20)return'ITM by +20%';
+      return`Needs +${(((K/S)-1)*100).toFixed(1)}%`;
+    }
+    if(K>=S)return'ITM now';
+    if(K>=S*0.90)return'ITM by -10%';
+    if(K>=S*0.80)return'ITM by -20%';
+    return`Needs ${(((K/S)-1)*100).toFixed(1)}%`;
+  }
+  function rangeScenarioLabel(S,K,dte,iv,rate,type,entryPrem){
+    const tenPct=priceTargetPct(type,10),twentyPct=priceTargetPct(type,20);
+    const tenSpot=S*(1+tenPct/100),twentySpot=S*(1+twentyPct/100);
+    const tenPrem=scenarioPremium(tenSpot,K,dte,iv,rate,type),twentyPrem=scenarioPremium(twentySpot,K,dte,iv,rate,type);
+    return`${tenPct>0?'+':''}${tenPct}% $${tenPrem.toFixed(2)} | ${twentyPct>0?'+':''}${twentyPct}% $${twentyPrem.toFixed(2)}`;
+  }
+  function tooltipEscape(text){
+    return String(text??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/\n/g,'&#10;');
+  }
+  function contractScenarioHint(title,spotTarget,S,K,dte,iv,rate,type,entryPrem){
+    const scenPrem=scenarioPremium(spotTarget,K,dte,iv,rate,type);
+    const pnl=(scenPrem-entryPrem)*100;
+    const movePct=((spotTarget/S)-1)*100;
+    return`${title}\nSpot ${movePct>=0?'+':''}${movePct.toFixed(1)}% -> $${spotTarget.toFixed(2)}\nContract ~$${scenPrem.toFixed(2)}/share\n${fmtMoney(pnl)} / contract vs entry`;
+  }
+  function impliedMoveHint(S,K,dte,iv,rate,type,entryPrem,movePct){
+    if(!Number.isFinite(movePct)||movePct<=0)return'';
+    const upSpot=S*(1+movePct/100),dnSpot=S*(1-movePct/100),upPrem=scenarioPremium(upSpot,K,dte,iv,rate,type),dnPrem=scenarioPremium(dnSpot,K,dte,iv,rate,type),upPnl=(upPrem-entryPrem)*100,dnPnl=(dnPrem-entryPrem)*100;
+    return`Implied move ladder\nUp to $${upSpot.toFixed(2)} -> $${upPrem.toFixed(2)}/share | ${fmtMoney(upPnl)} / contract\nDown to $${dnSpot.toFixed(2)} -> $${dnPrem.toFixed(2)}/share | ${fmtMoney(dnPnl)} / contract`;
+  }
   function marketReadSummary(S){
     if(!state.levelsData)return null;
     const levels=overlayLevels().map(level=>classifyLevelForRead(level,S));
@@ -1191,38 +1291,80 @@ window.addEventListener('DOMContentLoaded', () => {
     el('catSub').textContent=data.earnings_date&&data.days_to_earnings!=null?` - ${data.days_to_earnings} day${data.days_to_earnings===1?'':'s'} away`:'';
     el('catImvPill').textContent=data.implied_move_pct!=null?`+/-${data.implied_move_pct}%`:'-';
     el('catImvNote').textContent=data.implied_move_pct!=null?(data.straddle_expiry?`(${data.straddle_expiry} expiry)`:''):'chain data unavailable';
+    const S=parseFloat(el('ti-spot').value)||Number(state.levelsData?.price)||0,K=parseFloat(el('ti-strike').value)||S,dte=parseInt(el('ti-dte').value,10)||val('s-dte'),iv=val('s-iv')/100,rate=val('s-rate')/100,type=optionType(),entryPrem=state.currentPrem||bs(S,K,Math.max(dte,1)/365,rate,iv,type);
+    el('catImvPill').title=data.implied_move_pct!=null?impliedMoveHint(S,K,dte,iv,rate,type,entryPrem,Number(data.implied_move_pct)):'';
   }
   function renderLevelsStrip(){
     const strip=el('levelsStrip'),data=state.levelsData;
     if(!data){strip.classList.add('hidden');el('callWallPills').innerHTML='';el('putWallPills').innerHTML='';el('maPills').innerHTML='';el('refExpiryPills').innerHTML='';return;}
-    const S=parseFloat(el('ti-spot').value)||Number(data.price)||0,calls=(data.call_walls||[]).slice(0,3),puts=(data.put_walls||[]).slice(0,3),ma=data.moving_averages||{},maItems=[],refItems=[];
-    const nearestCallIdx=calls.length?calls.reduce((best,wall,idx,arr)=>Math.abs(wall.strike-S)<Math.abs(arr[best].strike-S)?idx:best,0):-1;
-    const nearestPutIdx=puts.length?puts.reduce((best,wall,idx,arr)=>Math.abs(wall.strike-S)<Math.abs(arr[best].strike-S)?idx:best,0):-1;
-    const maEntries=[['ema_21','EMA 21'],['sma_50','SMA 50'],['sma_200','SMA 200'],['ema_8','EMA 8'],['sma_20','SMA 20']].filter(([key])=>Number.isFinite(ma[key]));
-    const nearestMaKey=maEntries.reduce((best,[key])=>!best||Math.abs(ma[key]-S)<Math.abs(ma[best]-S)?key:best,'');
-    maEntries.forEach(([key,label])=>maItems.push(`<span class="lvl-pill ma ${key===nearestMaKey?'focus':''}">${label} $${ma[key].toFixed(2)}</span>`));
+    const S=parseFloat(el('ti-spot').value)||Number(data.price)||0,K=parseFloat(el('ti-strike').value)||S,dte=parseInt(el('ti-dte').value,10)||val('s-dte'),iv=val('s-iv')/100,rate=val('s-rate')/100,type=optionType(),entryPrem=state.currentPrem||bs(S,K,Math.max(dte,1)/365,rate,iv,type),summary=marketReadSummary(S);
+    const trend=overlayLevels().map(level=>classifyLevelForRead(level,S)).filter(level=>level.side==='pivot').sort((a,b)=>a.distancePct-b.distancePct||b.score-a.score)[0]||null;
+    const resistance=summary?.resistance?.anchor||null,support=summary?.support?.anchor||null;
+    const callHtml=resistance?`<span class="lvl-pill ${resistance.kind==='ma'?'ma':'call'} ${pillDistanceClass(summary.resistance.distancePct)} focus" title="${tooltipEscape(contractScenarioHint(levelName(resistance),resistance.price,S,K,dte,iv,rate,type,entryPrem))}">${levelName(resistance)} | ${closenessLabel(summary.resistance.distancePct)}</span>`:'<span class="lvl-pill ref">No nearby resistance</span>';
+    const putHtml=support?`<span class="lvl-pill ${support.kind==='ma'?'ma':'put'} ${pillDistanceClass(summary.support.distancePct)} focus" title="${tooltipEscape(contractScenarioHint(levelName(support),support.price,S,K,dte,iv,rate,type,entryPrem))}">${levelName(support)} | ${closenessLabel(summary.support.distancePct)}</span>`:'<span class="lvl-pill ref">No nearby support</span>';
+    const maHtml=trend?`<span class="lvl-pill ma ${pillDistanceClass(trend.distancePct)}" title="${tooltipEscape(contractScenarioHint(levelName(trend),trend.price,S,K,dte,iv,rate,type,entryPrem))}">${levelName(trend)} | ${closenessLabel(trend.distancePct)}</span>`:'<span class="lvl-pill ref">No nearby trend marker</span>';
+    const refItems=[];
+    if(Number.isFinite(Number(data.atr_14)))refItems.push(`<span class="lvl-pill ref">ATR14 $${Number(data.atr_14).toFixed(2)}</span>`);
     if(data.reference_expiry)refItems.push(`<span class="lvl-pill ref">${data.reference_expiry}</span>`);
     if(data.reference_dte!=null)refItems.push(`<span class="lvl-pill ref">${data.reference_dte}d</span>`);
-    if(Array.isArray(data.source_expiries)&&data.source_expiries.length)refItems.push(`<span class="lvl-pill ref">${data.source_expiries.length} exps</span>`);
-    el('callWallPills').innerHTML=calls.length?calls.map((w,idx)=>`<span class="lvl-pill call ${idx===nearestCallIdx?'focus':''}">C ${w.strike.toFixed(2)} | ${wallMetric(w)}</span>`).join(''):'<span class="lvl-pill ref">No call wall</span>';
-    el('putWallPills').innerHTML=puts.length?puts.map((w,idx)=>`<span class="lvl-pill put ${idx===nearestPutIdx?'focus':''}">P ${w.strike.toFixed(2)} | ${wallMetric(w)}</span>`).join(''):'<span class="lvl-pill ref">No put wall</span>';
-    el('maPills').innerHTML=maItems.join('');el('refExpiryPills').innerHTML=refItems.join('');
-    if(!calls.length&&!puts.length&&!maItems.length&&!refItems.length)strip.classList.add('hidden');else strip.classList.remove('hidden');
+    el('callWallPills').innerHTML=callHtml;
+    el('putWallPills').innerHTML=putHtml;
+    el('maPills').innerHTML=maHtml;
+    el('refExpiryPills').innerHTML=refItems.length?refItems.join(''):'<span class="lvl-pill ref">No ATR yet</span>';
+    strip.classList.remove('hidden');
   }
-  function renderMarketRead(){
-    const wrap=el('marketRead');
-    if(!state.levelsData){wrap.classList.add('hidden');el('readSupportPills').innerHTML='';el('readResistancePills').innerHTML='';el('readSupportNote').textContent='';el('readResistanceNote').textContent='';return;}
-    const S=parseFloat(el('ti-spot').value)||Number(state.levelsData.price)||0;
-    const summary=marketReadSummary(S);
-    if(!summary){wrap.classList.add('hidden');return;}
-    el('readBiasTitle').textContent=summary.tone;
-    el('readBiasTitle').className=`read-v ${summary.toneClass}`;
-    el('readBiasNote').textContent=summary.note;
-    el('readSupportPills').innerHTML=summary.support?summary.support.cluster.map((level,idx)=>`<span class="lvl-pill ${level.kind==='ma'?'ma':'put'} ${idx===0?'focus':''}">${levelName(level)}</span>`).join(''):'<span class="lvl-pill ref">No nearby support</span>';
-    el('readResistancePills').innerHTML=summary.resistance?summary.resistance.cluster.map((level,idx)=>`<span class="lvl-pill ${level.kind==='ma'?'ma':'call'} ${idx===0?'focus':''}">${levelName(level)}</span>`).join(''):'<span class="lvl-pill ref">No nearby resistance</span>';
-    el('readSupportNote').textContent=clusterNote(summary.support,'support');
-    el('readResistanceNote').textContent=clusterNote(summary.resistance,'resistance');
+  function renderTradePlan(S,K,dte,iv,rate,type,entryPrem){
+    const wrap=el('tradePlan');
+    if(!state.levelsData){wrap.classList.add('hidden');el('planContextNote').textContent='Fetch live data to anchor trims against nearby levels and ATR.';return;}
+    const summary=marketReadSummary(S),atrRaw=Number(state.levelsData.atr_14),atr=Number.isFinite(atrRaw)&&atrRaw>0?atrRaw:Math.max(0.5,S*0.02),support=summary?.support?.anchor?.price,resistance=summary?.resistance?.anchor?.price;
+    let entryLabel='â€”',entryNote='',stopSpot=S,stopNote='',trim1Spot=S,trim1Note='',trim2Spot=S,trim2Note='',contextNote=`ATR14 ${Number.isFinite(atrRaw)?`$${atr.toFixed(2)}`:'fallback'} keeps trim two tethered to the ticker's normal daily travel.`;
+    if(type==='put'){
+      const entryCeiling=Number.isFinite(resistance)&&resistance>S&&resistance-S<=atr*1.25?resistance:(S+atr*0.25);
+      entryLabel=`$${S.toFixed(2)}-${entryCeiling.toFixed(2)}`;
+      entryNote='Fade rallies into nearby supply rather than chase flushes.';
+      stopSpot=(Number.isFinite(resistance)?resistance:S+atr)+(atr*0.35);
+      stopNote='Above the nearest resistance band by ~0.35 ATR.';
+      trim1Spot=Number.isFinite(support)&&support<S?Math.max(support,S-atr):S-atr;
+      trim1Note=`First trim into the closest support pocket. Est. $${scenarioPremium(trim1Spot,K,dte,iv,rate,type).toFixed(2)}/share.`;
+      trim2Spot=Math.max(S*0.8,Math.min(trim1Spot-(atr*0.8),S-(atr*1.8)));
+      trim2Note=`Second trim lets ATR do the heavy lifting. Est. $${scenarioPremium(trim2Spot,K,dte,iv,rate,type).toFixed(2)}/share.`;
+      contextNote+=summary?.resistance?` Overhead supply sits around ${summary.resistance.band}.`:'';
+    }else{
+      const entryFloor=Number.isFinite(support)&&support<S&&S-support<=atr*1.25?support:Math.max(.01,S-(atr*0.25));
+      entryLabel=`$${entryFloor.toFixed(2)}-$${S.toFixed(2)}`;
+      entryNote='Lean on support or buy the reclaim rather than force the top tick.';
+      stopSpot=Math.max(.01,(Number.isFinite(support)?support:S-atr)-(atr*0.35));
+      stopNote='Below the nearest support band by ~0.35 ATR.';
+      trim1Spot=Number.isFinite(resistance)&&resistance>S?Math.min(resistance,S+atr):S+atr;
+      trim1Note=`First trim into the closest resistance pocket. Est. $${scenarioPremium(trim1Spot,K,dte,iv,rate,type).toFixed(2)}/share.`;
+      trim2Spot=Math.min(S*1.2,Math.max(trim1Spot+(atr*0.8),S+(atr*1.8)));
+      trim2Note=`Second trim uses ATR so the stretch target stays realistic. Est. $${scenarioPremium(trim2Spot,K,dte,iv,rate,type).toFixed(2)}/share.`;
+      contextNote+=summary?.support?` Support is clustered around ${summary.support.band}.`:'';
+    }
+    el('planEntry').textContent=entryLabel;
+    el('planEntryNote').textContent=entryNote;
+    el('planStop').textContent=`$${stopSpot.toFixed(2)}`;
+    el('planStopNote').textContent=stopNote;
+    el('planTrim1').textContent=`$${trim1Spot.toFixed(2)}`;
+    el('planTrim1Note').textContent=trim1Note;
+    el('planTrim2').textContent=`$${trim2Spot.toFixed(2)}`;
+    el('planTrim2Note').textContent=trim2Note;
+    el('planContextNote').textContent=contextNote;
     wrap.classList.remove('hidden');
+  }
+  function renderExecutionStrip(S,K,dte,iv,rate,type,entryPrem){
+    const strip=el('execStrip');
+    if(!state.liveTicker){strip.classList.add('hidden');return;}
+    const meta=state.currentContractIvMeta||{},mark=Number.isFinite(Number(meta.mark_price))?Number(meta.mark_price):entryPrem,spreadPct=Number(meta.spread_pct),grade=liquidityGrade(meta),fit=targetFitLabel(S,K,type);
+    el('execMark').innerHTML=`Mark <strong>$${mark.toFixed(2)}/shr</strong>`;
+    el('execSpread').innerHTML=`Spread <strong>${Number.isFinite(spreadPct)?`${spreadPct.toFixed(1)}%`:'â€”'}</strong>`;
+    el('execLiquidity').innerHTML=`Liquidity <strong>${grade}</strong>`;
+    el('execFit').innerHTML=`Target fit <strong>${fit}</strong>`;
+    el('execTargets').innerHTML=`${type==='put'?'-10% / -20%':'+10% / +20%'} <strong>${rangeScenarioLabel(S,K,dte,iv,rate,type,entryPrem)}</strong>`;
+    const targetHint=rangeScenarioLabel(S,K,dte,iv,rate,type,entryPrem);
+    el('execFit').title=targetHint;
+    el('execTargets').title=targetHint;
+    strip.classList.remove('hidden');
   }
   function updateHeaderMeta(){
     if(!state.quoteData){el('fcompany').textContent='';return;}
@@ -1263,7 +1405,7 @@ window.addEventListener('DOMContentLoaded', () => {
     state.currentPrem=prem;el('m-prem').textContent='$'+prem.toFixed(2)+'/shr';el('m-be').textContent='$'+be.toFixed(2);el('m-ml').textContent='-$'+totalCost.toLocaleString(undefined,{maximumFractionDigits:0});el('m-del').textContent=g.delta.toFixed(3);
     el('i-prem').textContent='$'+prem.toFixed(2);el('i-cost').textContent='-$'+totalCost.toLocaleString(undefined,{maximumFractionDigits:0});el('i-be').textContent='$'+be.toFixed(2);el('i-intr').textContent='$'+intr.toFixed(2);el('i-time').textContent='$'+tv.toFixed(2);el('i-money').innerHTML=mono>=0?`<span class="pos">+${mono.toFixed(1)}% ITM</span>`:`<span class="neg">${mono.toFixed(1)}% OTM</span>`;el('i-thetadol').textContent=thetaDol.toFixed(2);el('i-d50').textContent=typeof d50==='number'?`${d50}d`:d50;
     el('g-d').textContent=g.delta.toFixed(3);el('g-g').textContent=g.gamma.toFixed(4);el('g-t').textContent=g.theta.toFixed(3);el('g-v').textContent=g.vega.toFixed(3);el('g-r').textContent=g.rho.toFixed(3);
-    renderLevelsStrip();renderMarketRead();
+    renderLevelsStrip();renderTradePlan(S,K,dte,iv,rate,type,prem);renderExecutionStrip(S,K,dte,iv,rate,type,prem);
     if(!state.entryLocked)el('hv-entry-display').textContent='$'+prem.toFixed(2);el('hv-qty-display').textContent=qty;
     if(state.currentView==='heatmap')buildHeatmap(S,K,dte,iv,rate,qty,type,prem);else buildChain(S,dte,iv,rate,type);
     if(state.strategy==='hedge')calcHedge();
@@ -1281,7 +1423,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   async function fetchLive(){
     const ticker=el('tickerInput').value.toUpperCase().trim();if(!ticker)return null;
-    el('fstatus').innerHTML='<span class="badge idle">Fetching...</span>';el('fcompany').textContent='';state.liveTicker=ticker;state.quoteData=null;state.catalystData=null;state.levelsData=null;state.currentContractIvKey='';state.currentContractIvMeta=null;renderCatalystStrip();renderLevelsStrip();renderMarketRead();
+    el('fstatus').innerHTML='<span class="badge idle">Fetching...</span>';el('fcompany').textContent='';state.liveTicker=ticker;state.quoteData=null;state.catalystData=null;state.levelsData=null;state.currentContractIvKey='';state.currentContractIvMeta=null;renderCatalystStrip();renderLevelsStrip();el('tradePlan').classList.add('hidden');el('execStrip').classList.add('hidden');
     try{const[qRes,cRes,lRes]=await Promise.all([fetch(window.__seApiUrl(`/quote/${ticker}`),{signal:AbortSignal.timeout(8000)}),fetch(window.__seApiUrl(`/catalyst/${ticker}`),{signal:AbortSignal.timeout(14000)}),fetch(window.__seApiUrl(`/levels/${ticker}`),{signal:AbortSignal.timeout(14000)})]);if(!qRes.ok)throw new Error('HTTP '+qRes.status);const q=await qRes.json();if(q.error)throw new Error(q.error);state.quoteData=q;if(cRes.ok){const c=await cRes.json();if(!c.error)state.catalystData=c;}if(lRes.ok){const l=await lRes.json();if(!l.error)state.levelsData=l;}const p=q.price,lo=Math.floor(p*.35),hi=Math.ceil(p*1.65);el('s-spot').min=lo;el('s-spot').max=hi;el('s-spot').value=p;el('ti-spot').value=p.toFixed(2);el('s-strike').min=lo;el('s-strike').max=hi;el('s-strike').value=Math.round(p);el('ti-strike').value=Math.round(p).toFixed(2);setScenarioDefaults(p);if(Number.isFinite(Number(q.iv_pct))){const ivv=Math.min(200,Number(q.iv_pct));if(ivv>parseFloat(el('s-iv').max))el('s-iv').max=Math.ceil(ivv);el('s-iv').value=ivv;el('ti-iv').value=ivv.toFixed(1);}syncBounds();renderCatalystStrip();renderLevelsStrip();updateHeaderMeta();calc();el('fstatus').innerHTML=`<span class="badge ok">${ticker} live</span>`;return q;}catch(err){state.liveTicker='';el('fstatus').innerHTML='<span class="badge err">Server offline</span>';el('fcompany').textContent='Run options_calc_server.py first';throw err;}
   }
   function setStrat(s,btn){state.strategy=s;document.querySelectorAll('.strat-tab').forEach(tab=>tab.classList.remove('on'));btn.classList.add('on');el('hedgeSection').style.display=s==='hedge'?'block':'none';el('l-strike').textContent=s==='put'?'Put strike ($)':'Strike ($)';calc();}
@@ -1299,7 +1441,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const p=new URLSearchParams(window.location.search),pTicker=p.get('ticker'),pPrice=p.get('price')!==null?parseFloat(p.get('price')):null,pStrike=p.get('strike')!==null?parseFloat(p.get('strike')):null,pDte=p.get('dte')!==null?parseInt(p.get('dte'),10):null,pIv=p.get('iv')!==null?parseFloat(p.get('iv')):null;
     if(!pTicker)return;const ticker=pTicker.toUpperCase();el('tickerInput').value=ticker;
     const applyOverrides=()=>{if(pPrice!==null){const lo=Math.floor(pPrice*0.35),hi=Math.ceil(pPrice*1.65);el('s-spot').min=lo;el('s-spot').max=hi;el('s-spot').value=pPrice;el('ti-spot').value=pPrice.toFixed(2);el('s-strike').min=lo;el('s-strike').max=hi;setScenarioDefaults(pPrice);}if(pStrike!==null){el('s-strike').value=pStrike;el('ti-strike').value=pStrike.toFixed(2);}if(pDte!==null){el('s-dte').value=pDte;el('ti-dte').value=pDte;}if(pIv!==null){const ivv=Math.min(200,pIv);if(ivv>parseFloat(el('s-iv').max))el('s-iv').max=Math.ceil(ivv);el('s-iv').value=ivv;el('ti-iv').value=ivv.toFixed(1);}syncBounds();calc();};
-    if(pPrice!==null&&pIv!==null){state.liveTicker=ticker;state.quoteData={ticker,company:ticker,iv_pct:pIv,iv_source:'prefill'};applyOverrides();updateHeaderMeta();el('fstatus').innerHTML=`<span class="badge ok">${ticker} pre-filled</span>`;Promise.all([fetch(window.__seApiUrl(`/catalyst/${ticker}`),{signal:AbortSignal.timeout(14000)}).then(r=>r.ok?r.json():null).catch(()=>null),fetch(window.__seApiUrl(`/levels/${ticker}`),{signal:AbortSignal.timeout(14000)}).then(r=>r.ok?r.json():null).catch(()=>null)]).then(([c,l])=>{if(c&&!c.error)state.catalystData=c;if(l&&!l.error)state.levelsData=l;renderCatalystStrip();renderLevelsStrip();renderMarketRead();updateHeaderMeta();calc();}).catch(()=>{});}
+    if(pPrice!==null&&pIv!==null){state.liveTicker=ticker;state.quoteData={ticker,company:ticker,iv_pct:pIv,iv_source:'prefill'};applyOverrides();updateHeaderMeta();el('fstatus').innerHTML=`<span class="badge ok">${ticker} pre-filled</span>`;Promise.all([fetch(window.__seApiUrl(`/catalyst/${ticker}`),{signal:AbortSignal.timeout(14000)}).then(r=>r.ok?r.json():null).catch(()=>null),fetch(window.__seApiUrl(`/levels/${ticker}`),{signal:AbortSignal.timeout(14000)}).then(r=>r.ok?r.json():null).catch(()=>null)]).then(([c,l])=>{if(c&&!c.error)state.catalystData=c;if(l&&!l.error)state.levelsData=l;renderCatalystStrip();renderLevelsStrip();updateHeaderMeta();calc();}).catch(()=>{});}
   });
 })();
 </script>
