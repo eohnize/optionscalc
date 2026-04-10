@@ -543,6 +543,7 @@ def _extract_market_levels(ticker_obj, price: float, days_to_earnings: int | Non
     hist = ticker_obj.history(period="1y")
     moving_averages = {}
     previous_session = {"high": None, "low": None, "close": None}
+    atr_14 = None
 
     if hist is not None and not hist.empty:
         close = hist["Close"].dropna()
@@ -564,6 +565,21 @@ def _extract_market_levels(ticker_obj, price: float, days_to_earnings: int | Non
                 "low": round(float(ref["Low"]), 2),
                 "close": round(float(ref["Close"]), 2),
             }
+
+        tr_frame = hist.dropna(subset=["High", "Low", "Close"]).copy()
+        if len(tr_frame) >= 15:
+            prev_close = tr_frame["Close"].shift(1)
+            true_range = pd.concat(
+                [
+                    tr_frame["High"] - tr_frame["Low"],
+                    (tr_frame["High"] - prev_close).abs(),
+                    (tr_frame["Low"] - prev_close).abs(),
+                ],
+                axis=1,
+            ).max(axis=1)
+            atr_series = true_range.rolling(14).mean().dropna()
+            if not atr_series.empty:
+                atr_14 = round(float(atr_series.iloc[-1]), 2)
 
     all_expiries = ticker_obj.options
     reference_expiry, reference_dte = _select_reference_expiry(all_expiries, days_to_earnings)
@@ -588,6 +604,7 @@ def _extract_market_levels(ticker_obj, price: float, days_to_earnings: int | Non
         "put_walls": put_walls,
         "moving_averages": moving_averages,
         "previous_session": previous_session,
+        "atr_14": atr_14,
     }
 
 
